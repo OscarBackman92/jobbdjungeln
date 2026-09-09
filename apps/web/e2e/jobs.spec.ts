@@ -35,10 +35,14 @@ test.describe('annonssök', () => {
     await page.reload();
     await page.getByLabel('Sök jobb').fill('Ekonomiassistent');
     await page.getByRole('button', { name: 'Sök', exact: true }).click();
-    await expect(page.getByRole('article').first().getByRole('button', { name: 'Sparad' })).toBeVisible();
+    await expect(
+      page.getByRole('article').first().getByRole('button', { name: 'Sparad' }),
+    ).toBeVisible();
   });
 
-  test('filtren fylls med län och yrkesområden utan att kontakta upstream', async ({ page }) => {
+  test('filtren fylls med län och yrkesområden utan att kontakta upstream', async ({
+    page,
+  }) => {
     await signUp(page);
     await page.goto('/annonser');
     await page.getByRole('button', { name: 'Filter' }).click();

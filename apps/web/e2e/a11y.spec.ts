@@ -10,7 +10,14 @@ test.describe('tillgänglighet', () => {
   test('varje sida har exakt en h1 och ett landmärke för huvudinnehållet', async ({ page }) => {
     await signUp(page);
 
-    for (const path of ['/oversikt', '/sparade', '/ansokningar', '/annonser', '/rapport', '/profil']) {
+    for (const path of [
+      '/oversikt',
+      '/sparade',
+      '/ansokningar',
+      '/annonser',
+      '/rapport',
+      '/profil',
+    ]) {
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
       await expect(page.getByRole('main')).toBeVisible();

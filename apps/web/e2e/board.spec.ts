@@ -2,7 +2,9 @@ import { expect, test } from '@playwright/test';
 import { addRow, signUp } from './helpers';
 
 test.describe('tavlorna', () => {
-  test('ett sparat jobb kan läggas till, sökas fram och markeras som sökt', async ({ page }) => {
+  test('ett sparat jobb kan läggas till, sökas fram och markeras som sökt', async ({
+    page,
+  }) => {
     await signUp(page);
 
     await addRow(page, { board: '/sparade', company: 'Acme AB', title: 'Ekonomiassistent' });
@@ -58,7 +60,10 @@ test.describe('tavlorna', () => {
       salary: '45 000 kr/mån',
     });
 
-    await page.getByRole('button', { name: /Ekonomiassistent/ }).first().click();
+    await page
+      .getByRole('button', { name: /Ekonomiassistent/ })
+      .first()
+      .click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Ekonomiassistent' })).toBeVisible();
 

@@ -1,4 +1,4 @@
-import { type Page, expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /** A fresh address per test, so tests never see each other's data. */
 export function uniqueEmail(prefix = 'anna'): string {
@@ -15,7 +15,12 @@ export async function signUp(page: Page, email = uniqueEmail()): Promise<string>
   await page.getByLabel('Upprepa lösenordet').fill(PASSWORD);
   await page.getByRole('button', { name: 'Skapa konto' }).click();
 
-  // With verification off, sign-up signs the user straight in.
+  // Wait for the confirmation before navigating: the click only dispatches the
+  // request, and going straight to a protected page would race the session
+  // cookie being set.
+  await expect(page.getByText('Kolla mejlen')).toBeVisible();
+
+  // With verification switched off for the suite, that session is already live.
   await page.goto('/oversikt');
   await expect(page.getByRole('heading', { name: 'Översikt' })).toBeVisible();
   return email;
@@ -40,7 +45,10 @@ export async function addRow(
   }: { board: '/sparade' | '/ansokningar'; company: string; title: string; salary?: string },
 ): Promise<void> {
   await page.goto(board);
-  await page.getByRole('button', { name: /Nytt sparat jobb|Lägg till ansökan/ }).first().click();
+  await page
+    .getByRole('button', { name: /Nytt sparat jobb|Lägg till ansökan/ })
+    .first()
+    .click();
 
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Arbetsgivare').fill(company);

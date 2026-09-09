@@ -128,5 +128,5 @@ const server = createServer((request, response) => {
 
 const port = Number(process.env.MOCK_JOBTECH_PORT ?? 4010);
 server.listen(port, '127.0.0.1', () => {
-  console.log(`mock-jobtech lyssnar på http://127.0.0.1:${port}`);
+  console.info(`mock-jobtech lyssnar på http://127.0.0.1:${port}`);
 });

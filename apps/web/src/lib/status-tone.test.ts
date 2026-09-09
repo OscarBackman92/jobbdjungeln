@@ -1,4 +1,4 @@
-import { STATUSES, isClosed } from '@jobbdjungeln/core';
+import { isClosed, STATUSES } from '@jobbdjungeln/core';
 import { describe, expect, it } from 'vitest';
 import { statusTone } from './status-tone';
 

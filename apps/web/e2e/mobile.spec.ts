@@ -43,7 +43,10 @@ test.describe('mobil', () => {
       salary: '45 000 kr/mån',
     });
 
-    await page.getByRole('button', { name: /Ekonomiassistent/ }).first().click();
+    await page
+      .getByRole('button', { name: /Ekonomiassistent/ })
+      .first()
+      .click();
     await expect(page.getByRole('dialog')).toBeVisible();
   });
 });
