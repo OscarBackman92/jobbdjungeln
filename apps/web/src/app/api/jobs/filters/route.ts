@@ -7,26 +7,29 @@ import { currentUser } from '@/lib/session';
  * Filter options.
  *
  * Regions and occupation fields are built in, so the dropdowns render instantly
- * and keep working when the taxonomy API is down. The narrower lists are fetched
- * only once a broader filter is picked.
+ * and keep working when the taxonomy API is down. Narrower lists are fetched
+ * for every selected parent (several län → merged kommuner).
  */
 export async function GET(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Inte inloggad.' }, { status: 401 });
 
   const url = new URL(request.url);
-  const regionId = url.searchParams.get('region');
-  const fieldId = url.searchParams.get('omrade');
+  const regionIds = [...new Set(url.searchParams.getAll('region').filter(Boolean))];
+  const fieldIds = [...new Set(url.searchParams.getAll('omrade').filter(Boolean))];
 
   try {
-    const [municipalities, groups] = await Promise.all([
-      regionId ? jobtech().municipalities(regionId) : Promise.resolve([]),
-      fieldId ? jobtech().occupationGroups(fieldId) : Promise.resolve([]),
+    const client = jobtech();
+    const [municipalityLists, groupLists] = await Promise.all([
+      Promise.all(regionIds.map((id) => client.municipalities(id))),
+      Promise.all(fieldIds.map((id) => client.occupationGroups(id))),
     ]);
+
+    const municipalities = mergeById(municipalityLists.flat());
+    const groups = mergeById(groupLists.flat());
 
     return NextResponse.json(
       { regions: REGIONS, fields: OCCUPATION_FIELDS, municipalities, groups },
-      // The taxonomy is the same for everyone and changes about never.
       { headers: { 'cache-control': 'public, max-age=3600, stale-while-revalidate=86400' } },
     );
   } catch (error) {
@@ -38,4 +41,16 @@ export async function GET(request: Request) {
     }
     throw error;
   }
+}
+
+function mergeById<T extends { id: string; label: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  out.sort((a, b) => a.label.localeCompare(b.label, 'sv'));
+  return out;
 }

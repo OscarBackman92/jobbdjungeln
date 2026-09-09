@@ -34,19 +34,24 @@ export function SelectContent({
   className,
   children,
   position = 'popper',
+  collisionPadding = 16,
   ...props
 }: ComponentProps<typeof SelectPrimitive.Content>) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         position={position}
+        collisionPadding={collisionPadding}
         className={cn(
-          'scrollbar-slim relative z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-y-auto rounded-[var(--radius-control)] border border-line bg-raised p-1 shadow-overlay',
+          // Above the mobile bottom nav (z-40) so phone users can scroll options.
+          'scrollbar-slim relative z-[60] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-y-auto rounded-[var(--radius-control)] border border-line bg-raised p-1 shadow-overlay',
           className,
         )}
         {...props}
       >
-        <SelectPrimitive.Viewport>{children}</SelectPrimitive.Viewport>
+        <SelectPrimitive.Viewport className="max-h-[inherit] w-full">
+          {children}
+        </SelectPrimitive.Viewport>
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
   );

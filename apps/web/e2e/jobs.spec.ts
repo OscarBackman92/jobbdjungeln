@@ -6,14 +6,16 @@ test.describe('annonssök', () => {
     await signUp(page);
     await page.goto('/annonser');
 
-    await expect(page.getByText('Sök i hela Platsbanken')).toBeVisible();
+    // Newest ads load without a phrase; refine with a search term.
+    await expect(page.getByText(/annonser i Platsbanken|Söker i Platsbanken/)).toBeVisible({
+      timeout: 20_000,
+    });
 
     await page.getByLabel('Sök jobb').fill('Ekonomiassistent');
     await page.getByRole('button', { name: 'Sök', exact: true }).click();
 
     const card = page.getByRole('article').filter({ hasText: 'Ekonomiassistent till Acme AB' });
     await expect(card).toBeVisible();
-    // Exact, so this matches the location chip rather than the ad text.
     await expect(card.getByText('Stockholm', { exact: true })).toBeVisible();
 
     await card.getByRole('button', { name: 'Spara' }).click();
@@ -41,20 +43,32 @@ test.describe('annonssök', () => {
     ).toBeVisible();
   });
 
-  test('filtren fylls med län och yrkesområden utan att kontakta upstream', async ({
-    page,
-  }) => {
+  test('filtren låter dig välja flera kommuner efter län', async ({ page }) => {
     await signUp(page);
     await page.goto('/annonser');
     await page.getByRole('button', { name: 'Filter' }).click();
 
-    // Every filter is a named control, not just a box with text beside it.
-    await expect(page.getByRole('combobox', { name: 'Län' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Yrkesområde' })).toBeVisible();
+    await expect(page.getByText('Välj minst ett län först')).toBeVisible();
+    await expect(page.getByText('Välj minst ett yrkesområde först')).toBeVisible();
 
-    // The narrow lists stay disabled until the broad one is chosen.
-    await expect(page.getByRole('combobox', { name: 'Kommun' })).toBeDisabled();
-    await expect(page.getByRole('combobox', { name: 'Yrkesgrupp' })).toBeDisabled();
+    await page.getByRole('checkbox', { name: 'Stockholms län' }).click();
+    await expect(page.getByRole('checkbox', { name: 'Stockholm' })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole('checkbox', { name: 'Botkyrka' }).click();
+    await expect(page.getByRole('checkbox', { name: 'Botkyrka' })).toBeChecked();
+  });
+
+  test('läs annonsen öppnar modal i stället för extern länk', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/annonser');
+    await page.getByLabel('Sök jobb').fill('Ekonomiassistent');
+    await page.getByRole('button', { name: 'Sök', exact: true }).click();
+
+    const card = page.getByRole('article').filter({ hasText: 'Ekonomiassistent till Acme AB' });
+    await card.getByRole('button', { name: 'Läs annonsen' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('dialog').getByText('Ansök hos arbetsgivaren')).toBeVisible();
   });
 
   test('en sökning utan träffar säger det rakt ut', async ({ page }) => {

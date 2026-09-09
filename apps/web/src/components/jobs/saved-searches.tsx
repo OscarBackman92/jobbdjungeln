@@ -32,27 +32,36 @@ export function SavedSearches({
 }: {
   searches: SavedSearch[];
   current: SearchState;
-  onUse: (state: Pick<
-    SearchState,
-    'q' | 'region' | 'municipality' | 'field' | 'group' | 'remote'
-  >) => void;
+  onUse: (
+    state: Pick<
+      SearchState,
+      'q' | 'regions' | 'municipalities' | 'fields' | 'groups' | 'remote'
+    >,
+  ) => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [naming, setNaming] = useState(false);
   const [label, setLabel] = useState('');
 
-  const canSave = Boolean(current.q || current.region || current.field || current.remote);
+  const canSave = Boolean(
+    current.q ||
+      current.regions.length ||
+      current.municipalities.length ||
+      current.fields.length ||
+      current.groups.length ||
+      current.remote,
+  );
 
   function save() {
     startTransition(async () => {
       const result = await saveSearchAction({
         label: label.trim() || current.q || 'Sparad sökning',
         query: current.q,
-        regions: current.region ? [current.region] : [],
-        municipalities: current.municipality ? [current.municipality] : [],
-        occupationFields: current.field ? [current.field] : [],
-        occupationGroups: current.group ? [current.group] : [],
+        regions: current.regions,
+        municipalities: current.municipalities,
+        occupationFields: current.fields,
+        occupationGroups: current.groups,
         remote: current.remote,
         matchCv: false,
         digestOptIn: true,
@@ -87,10 +96,10 @@ export function SavedSearches({
             onClick={() =>
               onUse({
                 q: search.query,
-                region: search.regions[0] ?? '',
-                municipality: search.municipalities[0] ?? '',
-                field: search.occupationFields[0] ?? '',
-                group: search.occupationGroups[0] ?? '',
+                regions: search.regions,
+                municipalities: search.municipalities,
+                fields: search.occupationFields,
+                groups: search.occupationGroups,
                 remote: search.remote,
               })
             }
