@@ -84,7 +84,10 @@ async function counts(userId: string, year: number, month: number) {
     .select({
       total: sql<number>`count(*)::int`,
       included: sql<number>`count(*) filter (where ${schema.applications.reportExcluded} = false)::int`,
-      missing: sql<number>`count(*) filter (where ${schema.applications.reportExcluded} = false and ${schema.applications.occupationConceptId} = '')::int`,
+      // The label, not the concept id: the label is what the table prints in
+      // the Yrkesroll column, and a row that shows a role must not also be
+      // counted as missing one.
+      missing: sql<number>`count(*) filter (where ${schema.applications.reportExcluded} = false and ${schema.applications.occupationLabel} = '')::int`,
     })
     .from(schema.applications)
     .where(
@@ -239,7 +242,7 @@ export async function reportRows(
       svarade: answeredAdLabel(job.source),
       lank: job.adUrl,
       anteckning: job.title,
-      missingOccupation: !job.occupationConceptId,
+      missingOccupation: !job.occupationLabel,
     });
   }
 

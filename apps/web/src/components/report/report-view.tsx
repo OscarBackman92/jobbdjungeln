@@ -212,8 +212,9 @@ export function ReportView({
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
           <span>
             {plural(period.missingOccupationCount, 'rad saknar', 'rader saknar')} yrkesroll.
-            AF:s formulär vill ha en, och den fylls i automatiskt för jobb du sparat från
-            Platsbanken. Fyll i den för hand på övriga, under Ansökningar.
+            AF:s formulär vill ha en. Den följer med automatiskt för jobb du sparat från
+            Platsbanken — för ansökningar du lagt in själv fyller du i den direkt på AF:s
+            formulär.
           </span>
         </p>
       ) : null}
