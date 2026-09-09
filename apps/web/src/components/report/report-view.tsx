@@ -218,7 +218,12 @@ export function ReportView({
         </p>
       ) : null}
 
-      <Card>
+      {/*
+        min-w-0: a flex item refuses to shrink below its own content by default,
+        so the wide table would push the whole page sideways instead of
+        scrolling inside its own container.
+      */}
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>
             {plural(period.rows.length, 'rad', 'rader')} att rapportera för{' '}

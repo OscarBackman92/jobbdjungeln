@@ -22,6 +22,9 @@ test.describe('tavlorna', () => {
     await expect(dialog.getByText('Vad begärde du i lön?')).toBeVisible();
     await dialog.getByLabel('Löneanspråk').fill('45 000 kr/mån');
     await dialog.getByRole('button', { name: 'Spara och flytta' }).click();
+    // The dialog closes when the change has actually been saved; navigating
+    // before that would race the write.
+    await expect(dialog).toBeHidden();
 
     await page.goto('/ansokningar');
     await expect(page.getByText('Ekonomiassistent')).toBeVisible();
