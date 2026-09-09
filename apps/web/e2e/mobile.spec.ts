@@ -27,6 +27,14 @@ test.describe('mobil', () => {
 
     for (const path of ['/oversikt', '/ansokningar', '/rapport']) {
       await page.goto(path);
+      // Measure only once the page has actually rendered. Measuring a page
+      // mid-render reports no overflow whatever the layout does, which let a
+      // report table that dragged the page sideways pass most of the time.
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      if (path === '/rapport') {
+        await expect(page.getByRole('table')).toBeVisible();
+      }
+
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );

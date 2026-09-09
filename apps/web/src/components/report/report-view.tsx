@@ -232,14 +232,28 @@ export function ReportView({
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/*
+            relative on the scrolling box: overflow only clips an absolutely
+            positioned descendant when that box is also its containing block.
+            The sr-only labels in the table are position:absolute, so without
+            it they escape the scroller, land at the far edge of the full table
+            width and drag the whole document sideways on a narrow screen. The
+            table itself scrolls correctly — it is the labels that leak.
+          */}
           {period.rows.length === 0 ? (
             <EmptyState
               title="Inget att rapportera den här månaden"
               description="Sökta jobb dyker upp här av sig själva. Kurser, mässor och spontanansökningar lägger du till som aktiviteter."
             />
           ) : (
-            <div className="-mx-5 overflow-x-auto px-5">
-              <table className="w-full min-w-[54rem] text-left text-sm">
+            <div className="relative -mx-5 overflow-x-auto px-5">
+              {/*
+                Cell padding on the table rather than on every cell: without it
+                the columns are only kept apart by their content happening to
+                be narrower than the track, and a long date next to a long type
+                reads as one word ("2026-08-06Sökt jobb").
+              */}
+              <table className="w-full min-w-[54rem] text-left text-sm [&_:where(td,th)]:pr-4 [&_:where(td,th):last-child]:pr-0">
                 <thead>
                   <tr className="border-b border-line text-[13px] text-subtle">
                     <th scope="col" className="pb-2 font-medium">

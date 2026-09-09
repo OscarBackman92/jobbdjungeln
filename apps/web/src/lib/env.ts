@@ -14,6 +14,26 @@ function isBuildPhase(): boolean {
   return process.env.NEXT_PHASE === 'phase-production-build';
 }
 
+/**
+ * The origin a host tells us it is serving on.
+ *
+ * APP_URL is only needed because links in e-mail have to point somewhere, and
+ * a platform already knows its own address. Reading it means one less value to
+ * copy by hand — and a hand-copied one is exactly how a deployment ends up
+ * answering 500 on every route, because an origin that fails validation stops
+ * the whole app rather than just the e-mail links.
+ *
+ * The project's production domain wins over the per-deployment URL: the latter
+ * is unique to each deploy, and sessions are bound to the origin that issued
+ * them, so it would sign everyone out on the next push.
+ */
+function hostProvidedOrigin(): string | undefined {
+  const host =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (!host) return undefined;
+  return /^https?:\/\//.test(host) ? host : `https://${host}`;
+}
+
 const booleanish = z
   .union([z.boolean(), z.string()])
   .transform((value) =>
@@ -98,7 +118,10 @@ export const envSchema = z
 export type Env = z.infer<typeof envSchema>;
 
 function load(): Env {
-  const parsed = envSchema.safeParse(process.env);
+  const parsed = envSchema.safeParse({
+    ...process.env,
+    APP_URL: process.env.APP_URL?.trim() || hostProvidedOrigin(),
+  });
   if (parsed.success) return parsed.data;
 
   const details = parsed.error.issues
