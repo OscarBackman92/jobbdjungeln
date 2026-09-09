@@ -34,7 +34,7 @@ export function Checkbox({
   return (
     <CheckboxPrimitive.Root
       className={cn(
-        'peer size-4 shrink-0 rounded border border-line-strong bg-raised outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-50 data-[state=checked]:border-brand data-[state=checked]:bg-brand data-[state=checked]:text-on-brand',
+        "peer relative size-4 shrink-0 rounded border border-line-strong bg-raised outline-none transition-colors before:absolute before:inset-[-14px] before:content-[''] focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-50 data-[state=checked]:border-brand data-[state=checked]:bg-brand data-[state=checked]:text-on-brand",
         className,
       )}
       {...props}

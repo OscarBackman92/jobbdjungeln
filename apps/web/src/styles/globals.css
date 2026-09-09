@@ -31,8 +31,9 @@
     --border: oklch(90% 0.006 95);
     --border-strong: oklch(83% 0.008 95);
     --text: oklch(24% 0.012 90);
-    --text-muted: oklch(50% 0.012 90);
-    --text-subtle: oklch(62% 0.01 90);
+    /* ~#6B6A63 */
+    --text-muted: oklch(52% 0.01 100);
+    --text-subtle: oklch(55% 0.01 90);
 
     /* Brand: the deep green of the "jungle", used sparingly. */
     --brand: oklch(48% 0.11 165);
@@ -73,7 +74,7 @@
     --chart-4: #007048;
     --chart-5: #00623a;
     --chart-accent: #007048;
-    --chart-muted: #88867e;
+    --chart-muted: #6b6a63;
     --chart-grid: oklch(90% 0.006 95);
 
     --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.04), 0 1px 3px oklch(0% 0 0 / 0.04);
@@ -92,7 +93,8 @@
     --border: oklch(29% 0.01 260);
     --border-strong: oklch(38% 0.012 260);
     --text: oklch(95% 0.005 260);
-    --text-muted: oklch(72% 0.01 260);
+    /* ~#8B939B */
+    --text-muted: oklch(68% 0.015 250);
     --text-subtle: oklch(58% 0.012 260);
 
     --brand: oklch(72% 0.12 165);
@@ -126,7 +128,7 @@
     --chart-4: #5fcca1;
     --chart-5: #7ae7ba;
     --chart-accent: #5fcca1;
-    --chart-muted: #7c8088;
+    --chart-muted: #8b939b;
     --chart-grid: oklch(29% 0.01 260);
 
     --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.3), 0 1px 3px oklch(0% 0 0 / 0.25);
@@ -244,4 +246,30 @@
 @utility scrollbar-slim {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  aside,
+  header,
+  nav,
+  .skip-link {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  a[href]::after {
+    content: none !important;
+  }
 }

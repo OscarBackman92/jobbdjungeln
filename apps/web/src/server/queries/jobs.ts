@@ -10,7 +10,7 @@ import type { JobAd, SearchParams } from '@jobbdjungeln/jobtech';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { jobtech } from '@/lib/jobtech';
-import { trackedAdUrls } from '@/server/applications';
+import { trackedAds } from '@/server/applications';
 
 /**
  * Ad search, enriched for the signed-in user.
@@ -22,6 +22,8 @@ import { trackedAdUrls } from '@/server/applications';
 
 export interface SearchHit extends JobAd {
   alreadyTracked: boolean;
+  /** Present when the ad is already on the board, so the card can unsaved. */
+  trackedApplicationId: string | null;
   match: MatchSnapshot | null;
 }
 
@@ -39,25 +41,29 @@ export async function searchJobs(
 ): Promise<SearchResponse> {
   const [result, tracked, resume] = await Promise.all([
     jobtech().search(params),
-    trackedAdUrls(userId),
+    trackedAds(userId),
     db().query.resumes.findFirst({ where: eq(schema.resumes.userId, userId) }),
   ]);
 
-  const trackedKeys = new Set(tracked);
+  const trackedByKey = new Map(tracked.map((row) => [row.key, row.id]));
   const skills = resume?.skills ?? [];
   const hasResume = skills.length > 0;
 
   return {
     total: result.total,
     hasResume,
-    results: result.results.map((ad) => ({
-      ...ad,
-      alreadyTracked: trackedKeys.has(normalizeAdUrl(ad.webpageUrl)),
-      match:
-        withMatch && hasResume
-          ? trimSnapshot(scorePosting(skills, { title: ad.title, description: ad.description }))
-          : null,
-    })),
+    results: result.results.map((ad) => {
+      const trackedApplicationId = trackedByKey.get(normalizeAdUrl(ad.webpageUrl)) ?? null;
+      return {
+        ...ad,
+        alreadyTracked: trackedApplicationId !== null,
+        trackedApplicationId,
+        match:
+          withMatch && hasResume
+            ? trimSnapshot(scorePosting(skills, { title: ad.title, description: ad.description }))
+            : null,
+      };
+    }),
   };
 }
 

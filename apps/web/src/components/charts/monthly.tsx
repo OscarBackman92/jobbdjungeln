@@ -18,10 +18,21 @@ export interface MonthlyPoint {
 }
 
 const BAR_MAX_WIDTH = 24;
+const CHART_HEIGHT = 160;
 
 function label(key: string): string {
   const [, month] = key.split('-').map(Number);
   return month ? monthHeading(month).slice(0, 3) : key;
+}
+
+function yTicks(max: number): number[] {
+  if (max <= 1) return [0, 1];
+  if (max <= 4) return [0, 1, 2, max];
+  const step = Math.ceil(max / 4);
+  const ticks = [0];
+  for (let value = step; value < max; value += step) ticks.push(value);
+  if (ticks[ticks.length - 1] !== max) ticks.push(max);
+  return ticks;
 }
 
 export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
@@ -37,6 +48,7 @@ export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
   }
 
   const active = points.find((point) => point.key === hovered);
+  const ticks = yTicks(max);
 
   return (
     <div className="flex flex-col gap-3">
@@ -59,53 +71,101 @@ export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
         </span>
       </div>
 
-      <div className="relative">
-        <ul className="flex h-40 items-end justify-between gap-2">
-          {points.map((point) => {
-            const total = (point.applied / max) * 100;
-            const replied =
-              point.applied === 0 ? 0 : (point.reachedContact / point.applied) * 100;
-            const dim = hovered !== null && hovered !== point.key;
-            return (
-              <li
-                key={point.key}
-                className="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
-                onPointerEnter={() => setHovered(point.key)}
-                onPointerLeave={() => setHovered(null)}
-              >
-                <span
-                  className="flex w-full flex-col justify-end rounded-t-[4px] transition-opacity"
-                  style={{
-                    height: `${Math.max(total, point.applied > 0 ? 3 : 0)}%`,
-                    maxWidth: BAR_MAX_WIDTH,
-                    opacity: dim ? 0.5 : 1,
-                  }}
+      <div className="relative flex gap-2">
+        <div
+          className="flex w-6 shrink-0 flex-col justify-between pb-5 text-right text-[10px] tabular-nums text-subtle"
+          style={{ height: CHART_HEIGHT + 20 }}
+          aria-hidden
+        >
+          {[...ticks].reverse().map((tick) => (
+            <span key={tick}>{tick}</span>
+          ))}
+        </div>
+
+        <div className="relative min-w-0 flex-1">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0"
+            style={{ height: CHART_HEIGHT }}
+            aria-hidden
+          >
+            {ticks.map((tick) => (
+              <span
+                key={tick}
+                className="absolute inset-x-0 border-t border-chart-grid"
+                style={{ bottom: `${(tick / max) * 100}%` }}
+              />
+            ))}
+          </div>
+
+          <ul
+            className="relative flex items-end justify-between gap-2"
+            style={{ height: CHART_HEIGHT }}
+          >
+            {points.map((point) => {
+              const total = (point.applied / max) * 100;
+              const replied =
+                point.applied === 0 ? 0 : (point.reachedContact / point.applied) * 100;
+              const dim = hovered !== null && hovered !== point.key;
+              const empty = point.applied === 0;
+              return (
+                <li
+                  key={point.key}
+                  className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+                  onPointerEnter={() => setHovered(point.key)}
+                  onPointerLeave={() => setHovered(null)}
                 >
+                  {!empty ? (
+                    <span className="text-[10px] tabular-nums text-subtle">{point.applied}</span>
+                  ) : (
+                    <span className="text-[10px] text-transparent" aria-hidden>
+                      0
+                    </span>
+                  )}
                   <span
-                    className="w-full rounded-t-[4px]"
+                    className="relative flex w-full flex-col justify-end rounded-t-[4px] transition-opacity"
                     style={{
-                      height: `${replied}%`,
-                      backgroundColor: 'var(--chart-accent)',
+                      height: empty ? 2 : `${Math.max(total, 3)}%`,
+                      maxWidth: BAR_MAX_WIDTH,
+                      opacity: dim ? 0.5 : 1,
+                      backgroundColor: empty ? 'var(--chart-grid)' : undefined,
                     }}
-                  />
-                  <span
-                    className="w-full"
-                    style={{
-                      // A 2px gap in the surface colour separates the segments.
-                      height: `${100 - replied}%`,
-                      backgroundColor: 'var(--chart-muted)',
-                      borderTop:
-                        replied > 0 && replied < 100
-                          ? '2px solid var(--surface-raised)'
-                          : undefined,
-                    }}
-                  />
-                </span>
-                <span className="text-[11px] text-subtle">{label(point.key)}</span>
+                  >
+                    {!empty ? (
+                      <>
+                        <span
+                          className="w-full rounded-t-[4px]"
+                          style={{
+                            height: `${replied}%`,
+                            backgroundColor: 'var(--chart-accent)',
+                          }}
+                        />
+                        <span
+                          className="w-full"
+                          style={{
+                            height: `${100 - replied}%`,
+                            backgroundColor: 'var(--chart-muted)',
+                            borderTop:
+                              replied > 0 && replied < 100
+                                ? '2px solid var(--surface-raised)'
+                                : undefined,
+                          }}
+                        />
+                      </>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+
+          <ul className="mt-1.5 flex justify-between gap-2" aria-hidden>
+            {points.map((point) => (
+              <li key={point.key} className="flex-1 text-center text-[11px] text-subtle">
+                {label(point.key)}
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        </div>
       </div>
 
       <p aria-live="polite" className="min-h-4 text-[13px] text-subtle">

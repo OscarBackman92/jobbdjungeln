@@ -132,8 +132,8 @@ describe('buildSummary', () => {
 
   it('counts saved jobs apart from applications', () => {
     expect(summary.saved).toBe(3);
-    expect(summary.savedLanes.brattom).toBe(1);
-    expect(summary.savedLanes.denna_manad).toBe(1);
+    expect(summary.savedLanes.denna_vecka).toBe(1);
+    expect(summary.savedLanes.langre_fram).toBe(1);
     expect(summary.savedLanes.pa_is).toBe(1);
   });
 

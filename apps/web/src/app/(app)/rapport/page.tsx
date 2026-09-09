@@ -1,4 +1,4 @@
-import { periodKey, today as todayIso } from '@jobbdjungeln/core';
+import { defaultPeriodKey, periodKey, today as todayIso } from '@jobbdjungeln/core';
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/app/page-header';
 import { ReportView } from '@/components/report/report-view';
@@ -19,7 +19,7 @@ export default async function ReportPage({
   const today = todayIso();
   const [year, month] = today.split('-').map(Number) as [number, number];
   const periods = await listPeriods(user.id, today);
-  const requested = manad ?? periods[0]?.key ?? periodKey(year, month);
+  const requested = manad ?? defaultPeriodKey(periods, periodKey(year, month));
   const detail = await periodDetail(user.id, requested, today);
 
   return (

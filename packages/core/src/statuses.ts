@@ -132,8 +132,16 @@ export function hasApplied(status: Status): boolean {
   return APPLIED_STATUSES.includes(status);
 }
 
-/** Statuses the UI may offer from `status`, excluding the current one. */
+/**
+ * Statuses the UI may offer from `status`, excluding the current one.
+ *
+ * From Sparad only Ansökt and Återkallad — jumping to Accepterat/Avslag without
+ * an application date would distort the overview.
+ */
 export function allowedNextStatuses(status: Status): Status[] {
+  if (status === 'wishlist') {
+    return ['applied', 'withdrawn'];
+  }
   const currentStage = stageForStatus(status);
   const reachable = ALLOWED_STAGE_TRANSITIONS[currentStage];
   return STATUSES.filter((candidate) => {

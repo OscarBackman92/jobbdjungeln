@@ -5,12 +5,12 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui';
 
 /**
- * Root segment error UI.
+ * Route-level error inside the signed-in shell.
  *
- * Client boundaries cannot always set HTTP 500 after hydration; failures that
- * throw while rendering on the server still surface as 500 from Next.
+ * Lives under `(app)/layout`, so the sidebar and header stay. Client error
+ * boundaries cannot force HTTP 500; server throws during SSR still do.
  */
-export default function ErrorPage({
+export default function AppError({
   error,
   reset,
 }: {
@@ -25,7 +25,7 @@ export default function ErrorPage({
   }, [error]);
 
   function retry() {
-    window.location.assign(pathname || '/');
+    window.location.assign(pathname || '/oversikt');
   }
 
   async function copyReference() {
@@ -44,12 +44,12 @@ export default function ErrorPage({
   );
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
+    <div className="flex flex-col items-start gap-4 py-10">
       <h1 className="text-xl font-semibold tracking-tight text-ink">Något gick fel</h1>
-      <p className="max-w-sm text-sm text-muted">
+      <p className="max-w-md text-sm text-muted">
         Felet är loggat. Prova igen — dina uppgifter är oförändrade.
       </p>
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="primary"
           onClick={() => {
@@ -60,7 +60,7 @@ export default function ErrorPage({
           Försök igen
         </Button>
         <Button variant="secondary" asChild>
-          <a href="/">Till startsidan</a>
+          <a href="/oversikt">Till översikten</a>
         </Button>
         {error.digest ? (
           <Button variant="ghost" onClick={copyReference}>

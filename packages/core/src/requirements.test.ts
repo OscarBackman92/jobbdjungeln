@@ -50,6 +50,22 @@ describe('extractRequirements', () => {
     expect(byTerm.has('SAP')).toBe(false);
   });
 
+  it('does not treat Svenska/Engelska as scored requirements', () => {
+    const withLanguages = extractRequirements({
+      title: 'Receptionist',
+      description: [
+        'Kvalifikationer',
+        '- God svenska i tal och skrift',
+        '- Engelska',
+        '- Du har erfarenhet av Excel',
+      ].join('\n'),
+    });
+    const terms = withLanguages.map((req) => req.term);
+    expect(terms).toContain('Excel');
+    expect(terms).not.toContain('Svenska');
+    expect(terms).not.toContain('Engelska');
+  });
+
   it('treats a skill in the title as a hard requirement', () => {
     expect(byTerm.get('Ekonomiassistent')?.level).toBe('must');
     expect(byTerm.get('Ekonomiassistent')?.sourceLine).toBe(0);

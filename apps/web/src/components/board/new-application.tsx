@@ -1,7 +1,10 @@
 'use client';
 
 import {
+  addMonths,
   APPLICATION_SOURCES,
+  isValidSalaryClaim,
+  SALARY_CLAIM_NONE,
   SOURCE_LABELS,
   type Status,
   stageForStatus,
@@ -31,6 +34,9 @@ import {
 } from '@/components/ui';
 import { createApplicationAction } from '@/server/actions/applications';
 
+const DATE_MIN = addMonths(todayIso(), -24);
+const DATE_MAX = addMonths(todayIso(), 24);
+
 /**
  * Add a row by hand.
  *
@@ -55,18 +61,35 @@ export function NewApplicationButton({
 
   function submit(formData: FormData) {
     setError(undefined);
+
+    const company = String(formData.get('company') ?? '').trim();
+    const title = String(formData.get('title') ?? '').trim();
+    const salaryRaw = String(formData.get('salaryClaim') ?? '').trim();
+    const nextErrors: Record<string, string> = {};
+
+    if (!company) nextErrors.company = 'Ange arbetsgivare.';
+    if (!title) nextErrors.title = 'Ange vilken roll det gäller.';
+    if (needsSalary && salaryRaw && !isValidSalaryClaim(salaryRaw)) {
+      nextErrors.salaryClaim = 'Ange ett belopp med siffror, eller lämna tomt.';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      return;
+    }
     setFieldErrors({});
+
     startTransition(async () => {
       const result = await createApplicationAction({
-        company: String(formData.get('company') ?? ''),
-        title: String(formData.get('title') ?? ''),
+        company,
+        title,
         location: String(formData.get('location') ?? ''),
         status: defaultStatus,
         source: (formData.get('source') as string) || undefined,
         adUrl: String(formData.get('adUrl') ?? ''),
         deadline: String(formData.get('deadline') ?? ''),
         appliedAt: String(formData.get('appliedAt') ?? ''),
-        salaryClaim: String(formData.get('salaryClaim') ?? ''),
+        salaryClaim: needsSalary ? salaryRaw || SALARY_CLAIM_NONE : salaryRaw,
       });
 
       if (result.ok) {
@@ -95,7 +118,7 @@ export function NewApplicationButton({
           </DialogDescription>
         </DialogHeader>
 
-        <form action={submit}>
+        <form action={submit} noValidate>
           <DialogBody className="grid gap-4 sm:grid-cols-2">
             {error && Object.keys(fieldErrors).length === 0 ? (
               <div className="sm:col-span-2">
@@ -138,14 +161,20 @@ export function NewApplicationButton({
               <>
                 <Field label="Sökt datum">
                   {(props) => (
-                    <Input {...props} name="appliedAt" type="date" defaultValue={todayIso()} />
+                    <Input
+                      {...props}
+                      name="appliedAt"
+                      type="date"
+                      min={DATE_MIN}
+                      max={DATE_MAX}
+                      defaultValue={todayIso()}
+                    />
                   )}
                 </Field>
                 <Field
                   label="Löneanspråk"
-                  required
                   error={fieldErrors.salaryClaim}
-                  hint="Vad du begärde — bra att ha när rekryteraren ringer."
+                  hint="Valfritt — lämna tomt om du inte angav lön."
                 >
                   {(props) => (
                     <Input {...props} name="salaryClaim" placeholder="t.ex. 45 000 kr/mån" />
@@ -154,7 +183,9 @@ export function NewApplicationButton({
               </>
             ) : (
               <Field label="Sista ansökningsdag" className="sm:col-span-2">
-                {(props) => <Input {...props} name="deadline" type="date" />}
+                {(props) => (
+                  <Input {...props} name="deadline" type="date" min={DATE_MIN} max={DATE_MAX} />
+                )}
               </Field>
             )}
           </DialogBody>

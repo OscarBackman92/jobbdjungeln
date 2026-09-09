@@ -41,6 +41,7 @@ export interface DashboardRow {
   intent: Intent;
   appliedAt: IsoDate | null;
   applyBy: IsoDate | null;
+  applyByIsAuto?: boolean;
   deadline: IsoDate | null;
   nextActionAt: IsoDate | null;
   lastActivityAt: IsoDate | null;
@@ -98,11 +99,13 @@ function emptyCounts<K extends string>(keys: readonly K[]): Record<K, number> {
 }
 
 const SAVED_LANE_KEYS: readonly SavedLane[] = [
-  'brattom',
-  'denna_manad',
+  'utgangna',
+  'idag_imorgon',
+  'denna_vecka',
+  'senare_manad',
+  'langre_fram',
   'utan_datum',
   'pa_is',
-  'utgangna',
 ];
 const APPLIED_LANE_KEYS: readonly AppliedLane[] = [
   'vantar_for_lange',
@@ -190,15 +193,18 @@ export function buildNextActions(
         kind: 'follow_up',
         overdue: isFollowUpOverdue(row, today),
       });
-    } else if (stageForStatus(row.status) === 'bevakad' && row.applyBy) {
-      actions.push({
-        id: row.id,
-        company: row.company,
-        title: row.title,
-        due: row.applyBy,
-        kind: row.deadline === row.applyBy ? 'deadline' : 'apply_by',
-        overdue: daysBetween(row.applyBy, today) > 0,
-      });
+    } else if (stageForStatus(row.status) === 'bevakad') {
+      const due = row.deadline ?? (row.applyByIsAuto ? null : row.applyBy) ?? row.applyBy;
+      if (due) {
+        actions.push({
+          id: row.id,
+          company: row.company,
+          title: row.title,
+          due,
+          kind: row.deadline || (!row.applyByIsAuto && row.applyBy === due) ? 'deadline' : 'apply_by',
+          overdue: daysBetween(due, today) > 0,
+        });
+      }
     }
   }
 
@@ -258,8 +264,12 @@ export function buildSummary({
     (row) => furthestStageById.get(row.id) ?? stageForStatus(row.status),
   );
   const answered = furthest.filter((stage) => stage !== 'sokt').length;
+  // A percentage on n < 5 is noise and demoralising — hide it until there is a sample.
+  const RESPONSE_RATE_MIN = 5;
   const responseRate =
-    appliedRows.length === 0 ? null : Math.round((100 * answered) / appliedRows.length);
+    appliedRows.length < RESPONSE_RATE_MIN
+      ? null
+      : Math.round((100 * answered) / appliedRows.length);
 
   const reachedContactIds = new Set(
     appliedRows

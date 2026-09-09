@@ -1,8 +1,10 @@
 'use client';
 
 import { plural } from '@jobbdjungeln/core';
+import type { SearchSort } from '@jobbdjungeln/jobtech';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { JobCard, type JobHit } from '@/components/jobs/job-card';
 import { SavedSearches } from '@/components/jobs/saved-searches';
@@ -41,6 +43,9 @@ export interface SearchState {
   field: string;
   group: string;
   remote: boolean;
+  sort: SearchSort;
+  publishedAfter: string;
+  noExperience: boolean;
 }
 
 const EMPTY: SearchState = {
@@ -50,11 +55,45 @@ const EMPTY: SearchState = {
   field: '',
   group: '',
   remote: false,
+  sort: 'pubdate-desc',
+  publishedAfter: '',
+  noExperience: false,
 };
+
 const PAGE_SIZE = 20;
 const ANY = '__alla__';
 
-function toParams(state: SearchState, offset: number): string {
+const PUBLISHED_CHIPS: ReadonlyArray<{ label: string; minutes: string }> = [
+  { label: '24 timmar', minutes: String(24 * 60) },
+  { label: '7 dagar', minutes: String(7 * 24 * 60) },
+  { label: '30 dagar', minutes: String(30 * 24 * 60) },
+];
+
+const SORT_OPTIONS: ReadonlyArray<{ value: SearchSort; label: string }> = [
+  { value: 'pubdate-desc', label: 'Nyast' },
+  { value: 'relevance', label: 'Relevans' },
+  { value: 'applydate-asc', label: 'Sista dag' },
+];
+
+function stateFromParams(params: URLSearchParams): SearchState {
+  const sort = params.get('sort');
+  const validSort = SORT_OPTIONS.some((option) => option.value === sort)
+    ? (sort as SearchSort)
+    : 'pubdate-desc';
+  return {
+    q: params.get('q') ?? '',
+    region: params.get('region') ?? '',
+    municipality: params.get('kommun') ?? '',
+    field: params.get('omrade') ?? '',
+    group: params.get('yrkesgrupp') ?? '',
+    remote: params.get('distans') === '1',
+    sort: validSort,
+    publishedAfter: params.get('publicerad') ?? '',
+    noExperience: params.get('erfarenhet') === '0',
+  };
+}
+
+function toUrlParams(state: SearchState): URLSearchParams {
   const params = new URLSearchParams();
   if (state.q) params.set('q', state.q);
   if (state.municipality) params.set('kommun', state.municipality);
@@ -62,6 +101,15 @@ function toParams(state: SearchState, offset: number): string {
   if (state.group) params.set('yrkesgrupp', state.group);
   else if (state.field) params.set('omrade', state.field);
   if (state.remote) params.set('distans', '1');
+  if (state.sort && state.sort !== 'pubdate-desc') params.set('sort', state.sort);
+  if (state.publishedAfter) params.set('publicerad', state.publishedAfter);
+  if (state.noExperience) params.set('erfarenhet', '0');
+  return params;
+}
+
+function toApiParams(state: SearchState, offset: number): string {
+  const params = toUrlParams(state);
+  if (state.sort === 'pubdate-desc') params.set('sort', 'pubdate-desc');
   params.set('offset', String(offset));
   params.set('limit', String(PAGE_SIZE));
   return params.toString();
@@ -88,13 +136,36 @@ export function SearchPanel({
     remote: boolean;
   }>;
 }) {
-  const [draft, setDraft] = useState<SearchState>(EMPTY);
-  const [applied, setApplied] = useState<SearchState>(EMPTY);
-  const [showFilters, setShowFilters] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const remoteId = useId();
+  const experienceId = useId();
 
-  const { data: filters } = useQuery<Filters>({
-    queryKey: ['job-filters', applied.region, applied.field],
+  const initial = useMemo(() => stateFromParams(searchParams), [searchParams]);
+  const [draft, setDraft] = useState<SearchState>(initial);
+  const [applied, setApplied] = useState<SearchState>(initial);
+  const [showFilters, setShowFilters] = useState(
+    Boolean(initial.region || initial.field || initial.remote || initial.noExperience),
+  );
+  const [urlReady, setUrlReady] = useState(false);
+
+  // Hydrate from the URL once on mount (and when the user hits back/forward).
+  useEffect(() => {
+    const next = stateFromParams(searchParams);
+    setDraft(next);
+    setApplied(next);
+    setUrlReady(true);
+  }, [searchParams]);
+
+  const {
+    data: filters,
+    isFetching: filtersLoading,
+    isPending: filtersPending,
+  } = useQuery<Filters>({
+    // Draft drives the narrow lists so opening the panel after picking a län
+    // loads kommuner before the user presses Sök.
+    queryKey: ['job-filters', draft.region, draft.field],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (draft.region) params.set('region', draft.region);
@@ -106,36 +177,31 @@ export function SearchPanel({
     staleTime: 60 * 60_000,
   });
 
-  // Re-fetch the narrow lists when the broad choice changes.
-  const { refetch: refetchFilters } = useQuery<Filters>({
-    queryKey: ['job-filters-narrow', draft.region, draft.field],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (draft.region) params.set('region', draft.region);
-      if (draft.field) params.set('omrade', draft.field);
-      const response = await fetch(`/api/jobs/filters?${params}`);
-      return response.json();
-    },
-    enabled: Boolean(draft.region || draft.field),
-    staleTime: 60 * 60_000,
-  });
-
-  useEffect(() => {
-    if (draft.region || draft.field) void refetchFilters();
-  }, [draft.region, draft.field, refetchFilters]);
+  const narrowLoading =
+    Boolean(draft.region || draft.field) && (filtersPending || filtersLoading);
 
   const hasQuery = useMemo(
-    () => Boolean(applied.q || applied.region || applied.field || applied.remote),
+    () =>
+      Boolean(
+        applied.q ||
+          applied.region ||
+          applied.municipality ||
+          applied.field ||
+          applied.group ||
+          applied.remote ||
+          applied.publishedAfter ||
+          applied.noExperience,
+      ),
     [applied],
   );
 
   const { data, isFetching, isError, error, fetchNextPage, hasNextPage, refetch } =
     useInfiniteQuery({
       queryKey: ['jobs', applied],
-      enabled: hasQuery,
+      enabled: hasQuery && urlReady,
       initialPageParam: 0,
       queryFn: async ({ pageParam }) => {
-        const response = await fetch(`/api/jobs?${toParams(applied, pageParam)}`);
+        const response = await fetch(`/api/jobs?${toApiParams(applied, pageParam)}`);
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error ?? 'Sökningen misslyckades.');
         return payload as { total: number; results: JobHit[]; hasResume: boolean };
@@ -153,6 +219,9 @@ export function SearchPanel({
   function apply(next: SearchState = draft) {
     setDraft(next);
     setApplied(next);
+    const params = toUrlParams(next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
   return (
@@ -183,8 +252,6 @@ export function SearchPanel({
             variant="secondary"
             onClick={() => setShowFilters((value) => !value)}
             aria-expanded={showFilters}
-            // The label is hidden on a narrow screen, which would otherwise
-            // leave an icon-only button with no accessible name at all.
             aria-label="Filter"
           >
             <SlidersHorizontal aria-hidden />
@@ -230,10 +297,20 @@ export function SearchPanel({
                   disabled={!draft.region}
                 >
                   <SelectTrigger {...props}>
-                    <SelectValue placeholder={draft.region ? 'Hela länet' : 'Välj län först'} />
+                    <SelectValue
+                      placeholder={
+                        !draft.region
+                          ? 'Välj län först'
+                          : narrowLoading
+                            ? 'Laddar…'
+                            : 'Hela länet'
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ANY}>Hela länet</SelectItem>
+                    <SelectItem value={ANY}>
+                      {narrowLoading && draft.region ? 'Laddar…' : 'Hela länet'}
+                    </SelectItem>
                     {filters?.municipalities.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {item.label}
@@ -278,11 +355,19 @@ export function SearchPanel({
                 >
                   <SelectTrigger {...props}>
                     <SelectValue
-                      placeholder={draft.field ? 'Alla grupper' : 'Välj område först'}
+                      placeholder={
+                        !draft.field
+                          ? 'Välj område först'
+                          : narrowLoading
+                            ? 'Laddar…'
+                            : 'Alla grupper'
+                      }
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ANY}>Alla grupper</SelectItem>
+                    <SelectItem value={ANY}>
+                      {narrowLoading && draft.field ? 'Laddar…' : 'Alla grupper'}
+                    </SelectItem>
                     {filters?.groups.map((group) => (
                       <SelectItem key={group.id} value={group.id}>
                         {group.label}
@@ -293,7 +378,52 @@ export function SearchPanel({
               )}
             </Field>
 
-            <span className="flex items-center gap-2 sm:col-span-2">
+            <Field label="Sortering">
+              {(props) => (
+                <Select
+                  value={draft.sort}
+                  onValueChange={(value) => setDraft({ ...draft, sort: value as SearchSort })}
+                >
+                  <SelectTrigger {...props}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
+
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-[13px] font-medium text-ink">Publicerad</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={draft.publishedAfter === '' ? 'secondary' : 'ghost'}
+                  onClick={() => setDraft({ ...draft, publishedAfter: '' })}
+                >
+                  Alla
+                </Button>
+                {PUBLISHED_CHIPS.map((chip) => (
+                  <Button
+                    key={chip.minutes}
+                    type="button"
+                    size="sm"
+                    variant={draft.publishedAfter === chip.minutes ? 'secondary' : 'ghost'}
+                    onClick={() => setDraft({ ...draft, publishedAfter: chip.minutes })}
+                  >
+                    {chip.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <span className="flex items-center gap-2">
               <Checkbox
                 id={remoteId}
                 checked={draft.remote}
@@ -301,6 +431,19 @@ export function SearchPanel({
               />
               <Label htmlFor={remoteId} className="font-normal">
                 Endast jobb på distans
+              </Label>
+            </span>
+
+            <span className="flex items-center gap-2">
+              <Checkbox
+                id={experienceId}
+                checked={draft.noExperience}
+                onCheckedChange={(value) =>
+                  setDraft({ ...draft, noExperience: value === true })
+                }
+              />
+              <Label htmlFor={experienceId} className="font-normal">
+                Utan krav på erfarenhet
               </Label>
             </span>
 
@@ -317,7 +460,19 @@ export function SearchPanel({
         ) : null}
       </form>
 
-      <SavedSearches searches={savedSearches} current={applied} onUse={apply} />
+      <SavedSearches
+        searches={savedSearches}
+        current={applied}
+        onUse={(state) =>
+          apply({
+            ...EMPTY,
+            ...state,
+            sort: 'pubdate-desc',
+            publishedAfter: '',
+            noExperience: false,
+          })
+        }
+      />
 
       {!hasQuery ? (
         <EmptyState

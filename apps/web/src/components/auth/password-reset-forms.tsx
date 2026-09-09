@@ -41,7 +41,7 @@ export function ForgotPasswordForm() {
           i en timme.
         </p>
         <Link href="/logga-in" className="text-sm text-brand-text hover:underline">
-          Tillbaka till inloggningen
+          Tillbaka till inloggning
         </Link>
       </div>
     );
@@ -57,6 +57,11 @@ export function ForgotPasswordForm() {
       <Button type="submit" variant="primary" size="lg" loading={pending} className="w-full">
         Skicka återställningslänk
       </Button>
+      <p className="text-center text-sm">
+        <Link href="/logga-in" className="text-brand-text hover:underline">
+          Tillbaka till inloggning
+        </Link>
+      </p>
     </form>
   );
 }

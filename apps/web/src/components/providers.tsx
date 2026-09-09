@@ -38,7 +38,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider delayDuration={250}>{children}</TooltipProvider>
+        <TooltipProvider delayDuration={250} skipDelayDuration={0}>
+          {children}
+        </TooltipProvider>
         <Toaster
           position="bottom-center"
           richColors

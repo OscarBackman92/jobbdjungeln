@@ -26,3 +26,4 @@ Thumbs.db
 
 # Next build output is per-machine
 next-env.d.ts
+.vercel

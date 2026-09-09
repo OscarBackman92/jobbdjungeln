@@ -7,7 +7,10 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { MatchBadge } from '@/components/jobs/match-badge';
 import { Badge, Button, Card } from '@/components/ui';
-import { createApplicationAction } from '@/server/actions/applications';
+import {
+  createApplicationAction,
+  deleteApplicationAction,
+} from '@/server/actions/applications';
 
 export interface JobHit {
   id: string;
@@ -27,20 +30,36 @@ export interface JobHit {
   scopeOfWorkMin: number | null;
   scopeOfWorkMax: number | null;
   alreadyTracked: boolean;
+  trackedApplicationId: string | null;
   match: MatchSnapshot | null;
 }
 
 const EXCERPT_LENGTH = 260;
 
 export function JobCard({ job }: { job: JobHit }) {
-  const [saved, setSaved] = useState(job.alreadyTracked);
+  const [savedId, setSavedId] = useState<string | null>(job.trackedApplicationId);
   const [expanded, setExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
 
+  const saved = savedId !== null;
   const excerpt = job.description.slice(0, EXCERPT_LENGTH);
   const truncated = job.description.length > EXCERPT_LENGTH;
 
-  function save() {
+  function toggleSave() {
+    if (savedId) {
+      if (!confirm('Ta bort sparningen? Jobbet försvinner från Sparade jobb.')) return;
+      startTransition(async () => {
+        const result = await deleteApplicationAction(savedId);
+        if (result.ok) {
+          setSavedId(null);
+          toast.success('Borttagen från Sparade jobb');
+        } else {
+          toast.error(result.error);
+        }
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result = await createApplicationAction({
         company: job.companyName,
@@ -64,10 +83,9 @@ export function JobCard({ job }: { job: JobHit }) {
       });
 
       if (result.ok) {
-        setSaved(true);
+        setSavedId(result.data.id);
         toast.success('Sparad under Sparade jobb');
       } else {
-        setSaved(result.error.includes('spårar redan'));
         toast.error(result.error);
       }
     });
@@ -94,7 +112,7 @@ export function JobCard({ job }: { job: JobHit }) {
             {job.workingHoursType ? <Badge tone="neutral">{job.workingHoursType}</Badge> : null}
           </p>
         </div>
-        <MatchBadge match={job.match} />
+        <MatchBadge jobId={job.id} match={job.match} />
       </div>
 
       {job.description ? (
@@ -117,12 +135,12 @@ export function JobCard({ job }: { job: JobHit }) {
         <Button
           variant={saved ? 'secondary' : 'primary'}
           size="sm"
-          onClick={save}
+          onClick={toggleSave}
           loading={pending}
-          disabled={saved}
+          aria-pressed={saved}
         >
           {saved ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
-          {saved ? 'Sparad' : 'Spara'}
+          {saved ? 'Ångra' : 'Spara'}
         </Button>
 
         {isSafeExternalUrl(job.applicationUrl || job.webpageUrl) ? (

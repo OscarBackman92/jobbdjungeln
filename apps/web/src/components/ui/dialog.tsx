@@ -20,7 +20,8 @@ export function DialogContent({
       <DialogPrimitive.Content
         className={cn(
           // Full height on a phone, a centred sheet from `sm` up.
-          'fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col overflow-hidden rounded-t-2xl border border-line bg-raised shadow-overlay',
+          // No overflow-hidden here: the scroll surface is DialogBody (min-h-0).
+          'fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl border border-line bg-raised shadow-overlay',
           'sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[85dvh] sm:w-[min(42rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[var(--radius-card)]',
           className,
         )}
@@ -41,7 +42,10 @@ export function DialogContent({
 export function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn('flex flex-col gap-1 border-b border-line px-5 py-4 pr-14', className)}
+      className={cn(
+        'sticky top-0 z-10 flex shrink-0 flex-col gap-1 border-b border-line bg-raised px-5 py-4 pr-14',
+        className,
+      )}
       {...props}
     />
   );
@@ -71,7 +75,12 @@ export function DialogDescription({
 export function DialogBody({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn('scrollbar-slim flex-1 overflow-y-auto px-5 py-4', className)}
+      className={cn(
+        // min-h-0 lets this flex child shrink so overflow-y-auto can scroll
+        // inside a max-height dialog (without it, Save/Delete sit off-screen).
+        'scrollbar-slim min-h-0 flex-1 overflow-y-auto px-5 py-4',
+        className,
+      )}
       {...props}
     />
   );
@@ -81,7 +90,7 @@ export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'flex flex-col-reverse gap-2 border-t border-line px-5 py-4 sm:flex-row sm:justify-end',
+        'sticky bottom-0 z-10 flex shrink-0 flex-col-reverse gap-2 border-t border-line bg-raised px-5 py-4 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}

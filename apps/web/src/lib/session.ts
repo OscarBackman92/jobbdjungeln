@@ -38,7 +38,7 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
     image: user.image ?? null,
     emailVerified: user.emailVerified,
     operatorId: user.operatorId ?? '',
-    weeklySummaryOptIn: user.weeklySummaryOptIn ?? true,
+    weeklySummaryOptIn: user.weeklySummaryOptIn ?? false,
     reminderOptIn: user.reminderOptIn ?? true,
   };
 });

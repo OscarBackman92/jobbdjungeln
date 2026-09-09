@@ -201,7 +201,12 @@ export function findSkills(fullText: string, skillLines: readonly string[]): str
 
   // Explicit lists win: they are what the person chose to claim.
   for (const line of skillLines) {
-    for (const part of line.replace(BULLET_RE, '').split(SEPARATOR_RE)) {
+    let text = line.replace(BULLET_RE, '');
+    // "Programmeringsspråk: Java, Python" — drop the label, keep the list.
+    const colon = text.search(/[:：]/u);
+    if (colon !== -1) text = text.slice(colon + 1);
+
+    for (const part of text.split(SEPARATOR_RE)) {
       const candidate = cleanLine(part);
       // A sentence is a description, not a skill.
       if (!candidate || candidate.length > MAX_SKILL_LENGTH) continue;
@@ -250,6 +255,24 @@ interface RawEntry {
 
 const MAX_TITLE_LENGTH = 80;
 
+/**
+ * Design CVs often shout headings and roles in ALL CAPS. Turn those into
+ * readable title case without touching mixed-case text.
+ */
+export function normalizeCapsTitle(text: string): string {
+  const trimmed = cleanLine(text);
+  if (!trimmed) return '';
+  const letters = [...trimmed].filter((char) => /\p{L}/u.test(char));
+  if (letters.length < 4) return trimmed;
+  const upper = letters.filter((char) => char === char.toUpperCase() && char !== char.toLowerCase())
+    .length;
+  if (upper / letters.length < 0.8) return trimmed;
+  return trimmed.replace(/\p{L}+/gu, (word) => {
+    const [first = '', ...rest] = [...word];
+    return `${first.toLocaleUpperCase('sv')}${rest.join('').toLocaleLowerCase('sv')}`;
+  });
+}
+
 /** A line that could open an entry: short, not a bullet, not a sentence. */
 function looksLikeTitle(line: string): boolean {
   const text = cleanLine(line);
@@ -260,8 +283,13 @@ function looksLikeTitle(line: string): boolean {
 
 function splitTitle(line: string): { title: string; subtitle: string } {
   const parts = line.split(SEPARATOR_RE).map(cleanLine).filter(Boolean);
-  if (parts.length <= 1) return { title: cleanLine(line), subtitle: '' };
-  return { title: parts[0] ?? '', subtitle: parts.slice(1).join(', ') };
+  if (parts.length <= 1) {
+    return { title: normalizeCapsTitle(line), subtitle: '' };
+  }
+  return {
+    title: normalizeCapsTitle(parts[0] ?? ''),
+    subtitle: normalizeCapsTitle(parts.slice(1).join(', ')),
+  };
 }
 
 /** A line ending in a year, as education lists are usually written. */
@@ -431,9 +459,9 @@ function findHeadline(headerLines: readonly string[]): string {
     // The first line is usually the name; the second is the role.
     if (headerLines.indexOf(line) === 0) continue;
     if (/\d{4}/.test(line)) continue;
-    return line;
+    return normalizeCapsTitle(line);
   }
-  return cleanLine(headerLines[0] ?? '');
+  return normalizeCapsTitle(headerLines[0] ?? '');
 }
 
 /** Turn extracted CV text into an editable draft. Nothing here is persisted. */

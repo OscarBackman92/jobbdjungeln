@@ -1,9 +1,12 @@
 'use server';
 
 import {
+  employerKey,
   isTransitionAllowed,
+  isValidSalaryClaim,
   normalizeAdUrl,
   requiresSalaryClaim,
+  roleKey,
   STATUS_LABELS,
   salaryClaimMissingOnApply,
   stageForStatus,
@@ -50,6 +53,15 @@ export async function createApplicationAction(
       salaryClaim: 'Ange löneanspråk när du markerar som ansökt.',
     });
   }
+  if (
+    requiresSalaryClaim(values.status) &&
+    values.salaryClaim.trim() &&
+    !isValidSalaryClaim(values.salaryClaim)
+  ) {
+    return fail('Ange ett giltigt löneanspråk.', {
+      salaryClaim: 'Ange ett belopp med siffror, eller „Angav ingen lön”.',
+    });
+  }
 
   // The unique index is the real guard; this turns it into a useful message.
   const adUrlKey = normalizeAdUrl(values.adUrl);
@@ -65,6 +77,32 @@ export async function createApplicationAction(
       )
       .limit(1);
     if (existing) return fail('Du spårar redan den här annonsen.', { adUrl: 'Redan sparad.' });
+  }
+
+  // Manual entries often lack an ad URL — catch company+title duplicates too.
+  const eKey = employerKey(values.company);
+  const rKey = roleKey(values.title);
+  if (eKey && rKey) {
+    const candidates = await db()
+      .select({
+        id: schema.applications.id,
+        title: schema.applications.title,
+      })
+      .from(schema.applications)
+      .where(
+        and(
+          eq(schema.applications.userId, user.id),
+          eq(schema.applications.employerKey, eKey),
+          isNull(schema.applications.archivedAt),
+        ),
+      )
+      .limit(25);
+    const duplicate = candidates.find((row) => roleKey(row.title) === rKey);
+    if (duplicate) {
+      return fail('Du har redan sparat det här jobbet.', {
+        title: 'Öppna den sparade raden i stället.',
+      });
+    }
   }
 
   const row = await createApplication(user.id, values);
@@ -146,6 +184,11 @@ export async function changeStatusAction(input: unknown): Promise<ActionResult<v
   }
 
   const claim = salaryClaim?.trim() || existing.salaryClaim;
+  if (salaryClaim?.trim() && !isValidSalaryClaim(salaryClaim)) {
+    return fail('Ange ett giltigt löneanspråk.', {
+      salaryClaim: 'Ange ett belopp med siffror, eller „Angav ingen lön”.',
+    });
+  }
   if (
     salaryClaimMissingOnApply({ status, salaryClaim: claim, previousStatus: existing.status })
   ) {
@@ -178,8 +221,8 @@ export async function changeStatusAction(input: unknown): Promise<ActionResult<v
     fromStage: existing.stage,
     toStage: derived.stage,
     origin: 'auto',
-    // An interview is an activity the monthly report wants to know about.
-    isReportable: derived.stage === 'intervju',
+    // Internal status moves are not AF activities — only manual events count.
+    isReportable: false,
   });
 
   revalidateBoards();
@@ -242,9 +285,9 @@ export async function bulkAction(input: unknown): Promise<ActionResult<{ affecte
 
   if (action === 'mark_applied') {
     const claim = salaryClaim?.trim() ?? '';
-    if (!claim) {
+    if (!isValidSalaryClaim(claim)) {
       return fail('Ange löneanspråk när du markerar som ansökt.', {
-        salaryClaim: 'Krävs för att markera som ansökt.',
+        salaryClaim: 'Ange belopp eller „Angav ingen lön”.',
       });
     }
     const rows = await db()

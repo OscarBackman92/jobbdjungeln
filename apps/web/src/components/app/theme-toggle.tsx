@@ -51,6 +51,7 @@ export function ThemeToggle() {
               value={value}
               checked={active}
               onChange={() => setTheme(value)}
+              aria-label={label}
               className="absolute inset-0 cursor-pointer opacity-0"
             />
             <Icon className="size-3.5" aria-hidden />

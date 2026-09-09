@@ -32,7 +32,10 @@ export function SavedSearches({
 }: {
   searches: SavedSearch[];
   current: SearchState;
-  onUse: (state: SearchState) => void;
+  onUse: (state: Pick<
+    SearchState,
+    'q' | 'region' | 'municipality' | 'field' | 'group' | 'remote'
+  >) => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -102,9 +105,9 @@ export function SavedSearches({
             onClick={() => remove(search.id)}
             disabled={pending}
             aria-label={`Ta bort sökningen ${search.label}`}
-            className="rounded-r-full border border-l-0 border-line-strong py-0.5 pr-2 pl-1 text-subtle transition-colors hover:text-danger-text"
+            className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-r-full border border-l-0 border-line-strong pr-2 pl-1 text-subtle transition-colors hover:text-danger-text"
           >
-            <Trash2 className="size-3" aria-hidden />
+            <Trash2 className="size-3.5" aria-hidden />
           </button>
         </span>
       ))}

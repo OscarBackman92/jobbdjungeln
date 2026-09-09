@@ -113,6 +113,14 @@ export const envSchema = z
         message: 'Google-inloggning kräver både klient-id och klienthemlighet.',
       });
     }
+    if (!value.BREVO_API_KEY && !value.SMTP_URL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['BREVO_API_KEY'],
+        message:
+          'Produktion kräver BREVO_API_KEY eller SMTP_URL, annars når verifieringsmejlen aldrig mottagaren.',
+      });
+    }
   });
 
 export type Env = z.infer<typeof envSchema>;

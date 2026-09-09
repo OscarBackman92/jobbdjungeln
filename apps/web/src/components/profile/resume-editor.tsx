@@ -1,6 +1,6 @@
 'use client';
 
-import { normalizeSkillList } from '@jobbdjungeln/core';
+import { employerKey, normalizeSkillList, roleKey } from '@jobbdjungeln/core';
 import { FileUp, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -11,13 +11,21 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Checkbox,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   ErrorNote,
   Field,
   Input,
   Textarea,
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { parseResumeAction, saveResumeAction } from '@/server/actions/resume';
+import { type ResumeDraft, parseResumeAction, saveResumeAction } from '@/server/actions/resume';
 
 interface Experience {
   id: string;
@@ -49,6 +57,75 @@ function newId(): string {
   return crypto.randomUUID().slice(0, 8);
 }
 
+function experienceDupKey(employer: string, role: string): string {
+  return `${employerKey(employer)}|${roleKey(role)}`;
+}
+
+function educationDupKey(school: string, program: string): string {
+  return `${school.trim().toLowerCase()}|${program.trim().toLowerCase()}`;
+}
+
+interface SkillChoice {
+  value: string;
+  duplicate: boolean;
+  checked: boolean;
+}
+
+interface ExperienceChoice {
+  entry: ResumeDraft['experience'][number];
+  duplicate: boolean;
+  checked: boolean;
+}
+
+interface EducationChoice {
+  entry: ResumeDraft['education'][number];
+  duplicate: boolean;
+  checked: boolean;
+}
+
+interface ImportReview {
+  draft: ResumeDraft;
+  skills: SkillChoice[];
+  experience: ExperienceChoice[];
+  education: EducationChoice[];
+  overwriteHeadline: boolean;
+  overwriteSummary: boolean;
+}
+
+function buildImportReview(current: ResumeState, draft: ResumeDraft): ImportReview {
+  const existingSkills = new Set(current.skills.map((skill) => skill.toLowerCase()));
+  const existingJobs = new Set(
+    current.experience.map((entry) => experienceDupKey(entry.employer, entry.role)),
+  );
+  const existingEdu = new Set(
+    current.education.map((entry) => educationDupKey(entry.school, entry.program)),
+  );
+
+  const skills = normalizeSkillList(draft.skills).map((value) => {
+    const duplicate = existingSkills.has(value.toLowerCase());
+    return { value, duplicate, checked: !duplicate };
+  });
+
+  const experience = draft.experience.map((entry) => {
+    const duplicate = existingJobs.has(experienceDupKey(entry.employer, entry.role));
+    return { entry, duplicate, checked: !duplicate };
+  });
+
+  const education = draft.education.map((entry) => {
+    const duplicate = existingEdu.has(educationDupKey(entry.school, entry.program));
+    return { entry, duplicate, checked: !duplicate };
+  });
+
+  return {
+    draft,
+    skills,
+    experience,
+    education,
+    overwriteHeadline: false,
+    overwriteSummary: false,
+  };
+}
+
 /**
  * The CV.
  *
@@ -63,6 +140,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
   const [skillDraft, setSkillDraft] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [parsing, setParsing] = useState(false);
+  const [review, setReview] = useState<ImportReview | null>(null);
   const [saving, startSaving] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -80,21 +158,51 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
       return;
     }
 
-    const parsed = result.data;
-    setResume((current) => ({
-      headline: parsed.headline || current.headline,
-      summary: parsed.summary || current.summary,
-      skills: normalizeSkillList([...current.skills, ...parsed.skills]),
-      experience: [
-        ...current.experience,
-        ...parsed.experience.map((entry) => ({ ...entry, id: entry.id || newId() })),
-      ],
-      education: [
-        ...current.education,
-        ...parsed.education.map((entry) => ({ ...entry, id: newId() })),
-      ],
-    }));
-    toast.success('CV:t är inläst. Gå igenom och rätta innan du sparar.');
+    setReview(buildImportReview(resume, result.data));
+  }
+
+  function applyImport() {
+    if (!review) return;
+    const { draft } = review;
+
+    setResume((current) => {
+      const selectedExperience = review.experience.filter((item) => item.checked);
+      const overwriteKeys = new Set(
+        selectedExperience
+          .filter((item) => item.duplicate)
+          .map((item) => experienceDupKey(item.entry.employer, item.entry.role)),
+      );
+      const selectedEducation = review.education.filter((item) => item.checked);
+      const overwriteEduKeys = new Set(
+        selectedEducation
+          .filter((item) => item.duplicate)
+          .map((item) => educationDupKey(item.entry.school, item.entry.program)),
+      );
+
+      return {
+        headline:
+          review.overwriteHeadline && draft.headline ? draft.headline : current.headline,
+        summary: review.overwriteSummary && draft.summary ? draft.summary : current.summary,
+        skills: normalizeSkillList([
+          ...current.skills,
+          ...review.skills.filter((item) => item.checked).map((item) => item.value),
+        ]),
+        experience: [
+          ...current.experience.filter(
+            (entry) => !overwriteKeys.has(experienceDupKey(entry.employer, entry.role)),
+          ),
+          ...selectedExperience.map((item) => ({ ...item.entry, id: item.entry.id || newId() })),
+        ],
+        education: [
+          ...current.education.filter(
+            (entry) => !overwriteEduKeys.has(educationDupKey(entry.school, entry.program)),
+          ),
+          ...selectedEducation.map((item) => ({ ...item.entry, id: item.entry.id || newId() })),
+        ],
+      };
+    });
+    setReview(null);
+    toast.success('Valda delar är inlästa. Gå igenom och rätta innan du sparar.');
   }
 
   function save() {
@@ -125,6 +233,8 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
    * moment early, and the shape is small enough that the cost is invisible.
    */
   const dirty = JSON.stringify(resume) !== JSON.stringify(saved);
+  const wouldOverwriteHeadline = Boolean(review?.draft.headline && resume.headline);
+  const wouldOverwriteSummary = Boolean(review?.draft.summary && resume.summary);
 
   return (
     <div className="flex flex-col gap-4">
@@ -160,6 +270,225 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog open={review !== null} onOpenChange={(open) => !open && setReview(null)}>
+        <DialogContent className="sm:w-[min(36rem,calc(100vw-2rem))]">
+          <DialogHeader>
+            <DialogTitle>Granska innan du lägger till</DialogTitle>
+            <DialogDescription>
+              Markera det som ska föras in. Dubbletter är avmarkerade; rubrik och sammanfattning
+              skrivs bara över om du aktivt väljer det.
+            </DialogDescription>
+          </DialogHeader>
+          {review ? (
+            <>
+              <DialogBody className="flex flex-col gap-5">
+                {(review.draft.headline || review.draft.summary) && (
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-sm font-semibold text-ink">Rubrik & sammanfattning</h3>
+                    {review.draft.headline ? (
+                      <label className="flex items-start gap-2 text-sm text-ink">
+                        <Checkbox
+                          checked={review.overwriteHeadline}
+                          onCheckedChange={(value) =>
+                            setReview({ ...review, overwriteHeadline: value === true })
+                          }
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="font-medium">Rubrik:</span> {review.draft.headline}
+                          <span className="mt-0.5 block text-[13px] text-muted">
+                            {wouldOverwriteHeadline
+                              ? `Skriver över nuvarande: „${resume.headline}”.`
+                              : resume.headline
+                                ? 'Oförändrad om du lämnar den avmarkerad.'
+                                : 'Fyller i rubriken om du markerar.'}
+                          </span>
+                        </span>
+                      </label>
+                    ) : null}
+                    {review.draft.summary ? (
+                      <label className="flex items-start gap-2 text-sm text-ink">
+                        <Checkbox
+                          checked={review.overwriteSummary}
+                          onCheckedChange={(value) =>
+                            setReview({ ...review, overwriteSummary: value === true })
+                          }
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="font-medium">Sammanfattning</span>
+                          <span className="mt-0.5 block text-[13px] text-muted">
+                            {wouldOverwriteSummary
+                              ? 'Skriver över din nuvarande sammanfattning.'
+                              : resume.summary
+                                ? 'Oförändrad om du lämnar den avmarkerad.'
+                                : 'Fyller i sammanfattningen om du markerar.'}
+                          </span>
+                          <span className="mt-1 line-clamp-3 block text-[13px] text-subtle">
+                            {review.draft.summary}
+                          </span>
+                        </span>
+                      </label>
+                    ) : null}
+                  </section>
+                )}
+
+                <section className="flex flex-col gap-2">
+                  <h3 className="text-sm font-semibold text-ink">
+                    Kompetenser
+                    <span className="ml-1 font-normal text-muted">
+                      ({review.skills.filter((item) => !item.duplicate).length} nya
+                      {review.skills.some((item) => item.duplicate)
+                        ? `, ${review.skills.filter((item) => item.duplicate).length} dubbletter`
+                        : ''}
+                      )
+                    </span>
+                  </h3>
+                  {review.skills.length === 0 ? (
+                    <p className="text-sm text-muted">Inga kompetenser hittades.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5">
+                      {review.skills.map((item, index) => (
+                        <li key={item.value}>
+                          <label className="flex items-center gap-2 text-sm text-ink">
+                            <Checkbox
+                              checked={item.checked}
+                              onCheckedChange={(value) =>
+                                setReview({
+                                  ...review,
+                                  skills: review.skills.map((skill, i) =>
+                                    i === index ? { ...skill, checked: value === true } : skill,
+                                  ),
+                                })
+                              }
+                            />
+                            <span>
+                              {item.value}
+                              {item.duplicate ? (
+                                <span className="ml-1.5 text-[12px] text-subtle">finns redan</span>
+                              ) : null}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="flex flex-col gap-2">
+                  <h3 className="text-sm font-semibold text-ink">
+                    Erfarenhet
+                    <span className="ml-1 font-normal text-muted">
+                      ({review.experience.filter((item) => !item.duplicate).length} nya
+                      {review.experience.some((item) => item.duplicate)
+                        ? `, ${review.experience.filter((item) => item.duplicate).length} dubbletter`
+                        : ''}
+                      )
+                    </span>
+                  </h3>
+                  {review.experience.length === 0 ? (
+                    <p className="text-sm text-muted">Ingen erfarenhet hittades.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5">
+                      {review.experience.map((item, index) => (
+                        <li key={item.entry.id || index}>
+                          <label className="flex items-start gap-2 text-sm text-ink">
+                            <Checkbox
+                              checked={item.checked}
+                              onCheckedChange={(value) =>
+                                setReview({
+                                  ...review,
+                                  experience: review.experience.map((row, i) =>
+                                    i === index ? { ...row, checked: value === true } : row,
+                                  ),
+                                })
+                              }
+                              className="mt-0.5"
+                            />
+                            <span>
+                              <span className="font-medium">{item.entry.role || 'Roll saknas'}</span>
+                              {item.entry.employer ? ` · ${item.entry.employer}` : ''}
+                              {item.entry.start ? (
+                                <span className="text-muted">
+                                  {' '}
+                                  ({item.entry.start}
+                                  {item.entry.end ? `–${item.entry.end}` : ''})
+                                </span>
+                              ) : null}
+                              {item.duplicate ? (
+                                <span className="mt-0.5 block text-[12px] text-subtle">
+                                  Finns redan — markerad skriver över
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="flex flex-col gap-2">
+                  <h3 className="text-sm font-semibold text-ink">
+                    Utbildning
+                    <span className="ml-1 font-normal text-muted">
+                      ({review.education.filter((item) => !item.duplicate).length} nya
+                      {review.education.some((item) => item.duplicate)
+                        ? `, ${review.education.filter((item) => item.duplicate).length} dubbletter`
+                        : ''}
+                      )
+                    </span>
+                  </h3>
+                  {review.education.length === 0 ? (
+                    <p className="text-sm text-muted">Ingen utbildning hittades.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5">
+                      {review.education.map((item, index) => (
+                        <li key={item.entry.id || index}>
+                          <label className="flex items-start gap-2 text-sm text-ink">
+                            <Checkbox
+                              checked={item.checked}
+                              onCheckedChange={(value) =>
+                                setReview({
+                                  ...review,
+                                  education: review.education.map((row, i) =>
+                                    i === index ? { ...row, checked: value === true } : row,
+                                  ),
+                                })
+                              }
+                              className="mt-0.5"
+                            />
+                            <span>
+                              <span className="font-medium">
+                                {item.entry.program || 'Program saknas'}
+                              </span>
+                              {item.entry.school ? ` · ${item.entry.school}` : ''}
+                              {item.duplicate ? (
+                                <span className="mt-0.5 block text-[12px] text-subtle">
+                                  Finns redan — markerad skriver över
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              </DialogBody>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setReview(null)}>
+                  Avbryt
+                </Button>
+                <Button variant="primary" onClick={applyImport}>
+                  Lägg till markerade
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

@@ -83,6 +83,8 @@ function auth() {
       requireEmailVerification: !config.AUTH_TEST_MODE,
       resetPasswordTokenExpiresIn: 60 * 60,
       sendResetPassword: async ({ user, url }) => {
+        // Delivery failures stay quiet here: a 500 would tell an attacker the
+        // address exists. The mail layer already logs the failure.
         await sendMail(resetPassword(user.email, url));
       },
       onPasswordReset: async ({ user }) => {
@@ -96,7 +98,14 @@ function auth() {
       autoSignInAfterVerification: true,
       expiresIn: 60 * 60 * 24,
       sendVerificationEmail: async ({ user, url }) => {
-        await sendMail(verifyEmail(user.email, url));
+        const result = await sendMail(verifyEmail(user.email, url));
+        // Unlike password reset, a silent failure here strands the user: the
+        // form says "check your mail" and there is no resend path yet.
+        // Console delivery is fine locally; production refuses to boot without
+        // a real provider (env.ts).
+        if (!result.delivered) {
+          throw new Error('Kunde inte skicka bekräftelsemejlet. Försök igen om en stund.');
+        }
       },
     },
 

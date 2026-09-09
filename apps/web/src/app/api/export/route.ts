@@ -129,12 +129,14 @@ async function reportCsv(userId: string, key: string): Promise<string | null> {
   return toCsv(
     REPORT_COLUMNS,
     rows.map((row) => [
+      row.datum,
+      row.typ,
       row.yrke,
       row.arbetsgivare,
       row.omfattning,
       row.ort,
+      row.anteckning,
       row.svarade,
-      row.datum,
     ]),
   );
 }

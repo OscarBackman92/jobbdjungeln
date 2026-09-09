@@ -20,8 +20,8 @@ import { bulkAction } from '@/server/actions/applications';
 /**
  * The bar that appears once rows are selected.
  *
- * Fixed above the mobile navigation so it never covers it, and it names the
- * count so a bulk delete is never a surprise.
+ * Sticky at the bottom of the viewport, with a spacer so it never covers the
+ * last row in the list.
  */
 export function BulkBar({
   selected,
@@ -55,6 +55,9 @@ export function BulkBar({
 
   return (
     <>
+      {/* Reserve space so the fixed bar does not cover the last lane row. */}
+      <div className="h-24 shrink-0 lg:h-20" aria-hidden />
+
       <section
         aria-label={`${plural(selected.length, 'vald rad', 'valda rader')}`}
         className="fixed inset-x-3 bottom-[4.5rem] z-40 flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-line bg-raised p-2 shadow-overlay lg:inset-x-auto lg:right-6 lg:bottom-6 lg:left-[16.5rem]"

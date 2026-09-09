@@ -53,21 +53,51 @@ export async function ensurePeriods(
   userId: string,
   today: IsoDate = todayIso(),
 ): Promise<void> {
-  const months = await db()
-    .selectDistinct({
-      year: sql<number>`extract(year from ${schema.applications.appliedAt})::int`,
-      month: sql<number>`extract(month from ${schema.applications.appliedAt})::int`,
-    })
-    .from(schema.applications)
-    .where(
-      and(
-        eq(schema.applications.userId, userId),
-        sql`${schema.applications.appliedAt} is not null`,
+  const [fromJobs, fromActivities, fromEvents] = await Promise.all([
+    db()
+      .selectDistinct({
+        year: sql<number>`extract(year from ${schema.applications.appliedAt})::int`,
+        month: sql<number>`extract(month from ${schema.applications.appliedAt})::int`,
+      })
+      .from(schema.applications)
+      .where(
+        and(
+          eq(schema.applications.userId, userId),
+          sql`${schema.applications.appliedAt} is not null`,
+        ),
       ),
-    );
+    db()
+      .selectDistinct({
+        year: sql<number>`extract(year from ${schema.activities.occurredOn})::int`,
+        month: sql<number>`extract(month from ${schema.activities.occurredOn})::int`,
+      })
+      .from(schema.activities)
+      .where(eq(schema.activities.userId, userId)),
+    db()
+      .selectDistinct({
+        year: sql<number>`extract(year from ${schema.applicationEvents.occurredAt})::int`,
+        month: sql<number>`extract(month from ${schema.applicationEvents.occurredAt})::int`,
+      })
+      .from(schema.applicationEvents)
+      .innerJoin(
+        schema.applications,
+        eq(schema.applicationEvents.applicationId, schema.applications.id),
+      )
+      .where(
+        and(
+          eq(schema.applications.userId, userId),
+          eq(schema.applicationEvents.isReportable, true),
+        ),
+      ),
+  ]);
 
   const [thisYear, thisMonth] = today.split('-').map(Number) as [number, number];
-  const wanted = new Map(months.map((m) => [`${m.year}-${m.month}`, m]));
+  const wanted = new Map<string, { year: number; month: number }>();
+  for (const batch of [fromJobs, fromActivities, fromEvents]) {
+    for (const m of batch) {
+      if (m.year && m.month) wanted.set(`${m.year}-${m.month}`, m);
+    }
+  }
   wanted.set(`${thisYear}-${thisMonth}`, { year: thisYear, month: thisMonth });
 
   if (wanted.size === 0) return;
@@ -79,51 +109,52 @@ export async function ensurePeriods(
 
 async function counts(userId: string, year: number, month: number) {
   const { start, end } = periodBounds(year, month);
+  const database = db();
 
-  const [jobs] = await db()
-    .select({
-      total: sql<number>`count(*)::int`,
-      included: sql<number>`count(*) filter (where ${schema.applications.reportExcluded} = false)::int`,
-      // The label, not the concept id: the label is what the table prints in
-      // the Yrkesroll column, and a row that shows a role must not also be
-      // counted as missing one.
-      missing: sql<number>`count(*) filter (where ${schema.applications.reportExcluded} = false and ${schema.applications.occupationLabel} = '')::int`,
-    })
-    .from(schema.applications)
-    .where(
-      and(
-        eq(schema.applications.userId, userId),
-        isNull(schema.applications.archivedAt),
-        between(schema.applications.appliedAt, start, end),
+  const [[jobs], [activities], [events]] = await Promise.all([
+    database
+      .select({
+        total: sql<number>`count(*)::int`,
+        included: sql<number>`count(*) filter (where ${schema.applications.reportExcluded} = false)::int`,
+        // The label, not the concept id: the label is what the table prints in
+        // the Yrkesroll column, and a row that shows a role must not also be
+        // counted as missing one.
+        missing: sql<number>`count(*) filter (where ${schema.applications.reportExcluded} = false and ${schema.applications.occupationLabel} = '')::int`,
+      })
+      .from(schema.applications)
+      .where(
+        and(
+          eq(schema.applications.userId, userId),
+          isNull(schema.applications.archivedAt),
+          between(schema.applications.appliedAt, start, end),
+        ),
       ),
-    );
-
-  const [activities] = await db()
-    .select({ included: sql<number>`count(*)::int` })
-    .from(schema.activities)
-    .where(
-      and(
-        eq(schema.activities.userId, userId),
-        eq(schema.activities.reportExcluded, false),
-        between(schema.activities.occurredOn, start, end),
+    database
+      .select({ included: sql<number>`count(*)::int` })
+      .from(schema.activities)
+      .where(
+        and(
+          eq(schema.activities.userId, userId),
+          eq(schema.activities.reportExcluded, false),
+          between(schema.activities.occurredOn, start, end),
+        ),
       ),
-    );
-
-  const [events] = await db()
-    .select({ included: sql<number>`count(*)::int` })
-    .from(schema.applicationEvents)
-    .innerJoin(
-      schema.applications,
-      eq(schema.applicationEvents.applicationId, schema.applications.id),
-    )
-    .where(
-      and(
-        eq(schema.applications.userId, userId),
-        eq(schema.applicationEvents.isReportable, true),
-        eq(schema.applicationEvents.reportExcluded, false),
-        between(schema.applicationEvents.occurredAt, start, end),
+    database
+      .select({ included: sql<number>`count(*)::int` })
+      .from(schema.applicationEvents)
+      .innerJoin(
+        schema.applications,
+        eq(schema.applicationEvents.applicationId, schema.applications.id),
+      )
+      .where(
+        and(
+          eq(schema.applications.userId, userId),
+          eq(schema.applicationEvents.isReportable, true),
+          eq(schema.applicationEvents.reportExcluded, false),
+          between(schema.applicationEvents.occurredAt, start, end),
+        ),
       ),
-    );
+  ]);
 
   return {
     jobCount: jobs?.total ?? 0,
@@ -215,8 +246,9 @@ export async function reportRows(
 ): Promise<ReportRow[]> {
   const { start, end } = periodBounds(year, month);
   const rows: ReportRow[] = [];
+  const database = db();
 
-  const jobs = await db()
+  const jobs = await database
     .select()
     .from(schema.applications)
     .where(
@@ -250,7 +282,7 @@ export async function reportRows(
   // would be a one-way door. Events carry no exclusion list of their own here:
   // they are excluded through the application they belong to.
   if (excluded) {
-    const hidden = await db()
+    const hidden = await database
       .select()
       .from(schema.activities)
       .where(
@@ -268,33 +300,46 @@ export async function reportRows(
     return rows.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
   }
 
-  const events = await db()
-    .select({
-      id: schema.applicationEvents.id,
-      occurredAt: schema.applicationEvents.occurredAt,
-      note: schema.applicationEvents.note,
-      eventType: schema.applicationEvents.eventType,
-      company: schema.applications.company,
-      location: schema.applications.location,
-      occupationLabel: schema.applications.occupationLabel,
-      workingHoursType: schema.applications.workingHoursType,
-      source: schema.applications.source,
-      adUrl: schema.applications.adUrl,
-    })
-    .from(schema.applicationEvents)
-    .innerJoin(
-      schema.applications,
-      eq(schema.applicationEvents.applicationId, schema.applications.id),
-    )
-    .where(
-      and(
-        eq(schema.applications.userId, userId),
-        eq(schema.applicationEvents.isReportable, true),
-        eq(schema.applicationEvents.reportExcluded, false),
-        between(schema.applicationEvents.occurredAt, start, end),
-      ),
-    )
-    .orderBy(asc(schema.applicationEvents.occurredAt));
+  const [events, activities] = await Promise.all([
+    database
+      .select({
+        id: schema.applicationEvents.id,
+        occurredAt: schema.applicationEvents.occurredAt,
+        note: schema.applicationEvents.note,
+        eventType: schema.applicationEvents.eventType,
+        company: schema.applications.company,
+        location: schema.applications.location,
+        occupationLabel: schema.applications.occupationLabel,
+        workingHoursType: schema.applications.workingHoursType,
+        source: schema.applications.source,
+        adUrl: schema.applications.adUrl,
+      })
+      .from(schema.applicationEvents)
+      .innerJoin(
+        schema.applications,
+        eq(schema.applicationEvents.applicationId, schema.applications.id),
+      )
+      .where(
+        and(
+          eq(schema.applications.userId, userId),
+          eq(schema.applicationEvents.isReportable, true),
+          eq(schema.applicationEvents.reportExcluded, false),
+          between(schema.applicationEvents.occurredAt, start, end),
+        ),
+      )
+      .orderBy(asc(schema.applicationEvents.occurredAt)),
+    database
+      .select()
+      .from(schema.activities)
+      .where(
+        and(
+          eq(schema.activities.userId, userId),
+          eq(schema.activities.reportExcluded, false),
+          between(schema.activities.occurredOn, start, end),
+        ),
+      )
+      .orderBy(asc(schema.activities.occurredOn)),
+  ]);
 
   for (const event of events) {
     rows.push({
@@ -312,18 +357,6 @@ export async function reportRows(
       missingOccupation: false,
     });
   }
-
-  const activities = await db()
-    .select()
-    .from(schema.activities)
-    .where(
-      and(
-        eq(schema.activities.userId, userId),
-        eq(schema.activities.reportExcluded, false),
-        between(schema.activities.occurredOn, start, end),
-      ),
-    )
-    .orderBy(asc(schema.activities.occurredOn));
 
   for (const activity of activities) {
     rows.push(activityRow(activity));
@@ -354,11 +387,15 @@ export async function periodDetail(
     .limit(1);
 
   const base = period ?? { ...parts, submittedAt: null, note: '' };
-  const summary = summarize(base, await counts(userId, parts.year, parts.month), today);
+  const [totals, rows, excludedRows] = await Promise.all([
+    counts(userId, parts.year, parts.month),
+    reportRows(userId, parts.year, parts.month),
+    reportRows(userId, parts.year, parts.month, { excluded: true }),
+  ]);
 
   return {
-    ...summary,
-    rows: await reportRows(userId, parts.year, parts.month),
-    excludedRows: await reportRows(userId, parts.year, parts.month, { excluded: true }),
+    ...summarize(base, totals, today),
+    rows,
+    excludedRows,
   };
 }

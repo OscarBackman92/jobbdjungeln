@@ -150,6 +150,7 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
 
   function remove() {
     if (!id) return;
+    if (!confirm('Ta bort den här raden permanent? Det går inte att ångra.')) return;
     startTransition(async () => {
       const result = await deleteApplicationAction(id);
       if (result.ok) {
@@ -213,8 +214,8 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
                 </TabsList>
               </div>
 
-              <TabsContent value="detaljer" className="min-h-0 flex-1">
-                <form action={save}>
+              <TabsContent value="detaljer" className="flex min-h-0 flex-1 flex-col">
+                <form action={save} className="flex min-h-0 flex-1 flex-col">
                   <DialogBody className="grid gap-4 sm:grid-cols-2">
                     {error ? (
                       <div className="sm:col-span-2">
@@ -334,7 +335,7 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
                 </form>
               </TabsContent>
 
-              <TabsContent value="tidslinje" className="min-h-0 flex-1">
+              <TabsContent value="tidslinje" className="flex min-h-0 flex-1 flex-col">
                 <DialogBody className="flex flex-col gap-4">
                   <form
                     action={addNote}
@@ -389,7 +390,7 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
               </TabsContent>
 
               {data.adDescription ? (
-                <TabsContent value="annons" className="min-h-0 flex-1">
+                <TabsContent value="annons" className="flex min-h-0 flex-1 flex-col">
                   <DialogBody>
                     <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted">
                       {data.adDescription}

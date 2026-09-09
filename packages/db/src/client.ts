@@ -1,8 +1,8 @@
 /**
  * Database client.
  *
- * One pooled connection per process, cached across hot reloads in development so
- * a file save does not leak a new pool on every edit.
+ * One pooled connection per process, cached across hot reloads and warm
+ * serverless instances so each rendering does not open a fresh pool.
  */
 
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -18,10 +18,14 @@ export interface DatabaseOptions {
   ssl?: boolean;
 }
 
-export function createDatabase({ url, max = 10, ssl }: DatabaseOptions) {
+/** Default pool size: one connection per instance is enough behind a transaction pooler. */
+const DEFAULT_MAX = 1;
+
+export function createDatabase({ url, max = DEFAULT_MAX, ssl }: DatabaseOptions) {
   const client = postgres(url, {
     max,
-    // Prepared statements break through connection poolers such as PgBouncer.
+    // Prepared statements break through connection poolers such as PgBouncer /
+    // Supavisor in transaction mode.
     prepare: false,
     ...(ssl === undefined ? {} : { ssl: ssl ? 'require' : false }),
   });
@@ -31,14 +35,23 @@ export function createDatabase({ url, max = 10, ssl }: DatabaseOptions) {
 declare global {
   // eslint-disable-next-line no-var
   var __jobbdjungelnDb: Database | undefined;
+  // eslint-disable-next-line no-var
+  var __jobbdjungelnDbUrl: string | undefined;
 }
 
-/** The shared instance. Reuses the pool across hot reloads in development. */
-export function getDatabase(url: string): Database {
-  if (process.env.NODE_ENV === 'production') {
-    return createDatabase({ url });
+/**
+ * The shared instance.
+ *
+ * Always reuse the pool — including in production on Vercel. Creating a new
+ * postgres.js client per `db()` call exhausts Supavisor’s client limit and
+ * takes the whole site down.
+ */
+export function getDatabase(url: string, options: Omit<DatabaseOptions, 'url'> = {}): Database {
+  if (globalThis.__jobbdjungelnDb && globalThis.__jobbdjungelnDbUrl === url) {
+    return globalThis.__jobbdjungelnDb;
   }
-  globalThis.__jobbdjungelnDb ??= createDatabase({ url });
+  globalThis.__jobbdjungelnDbUrl = url;
+  globalThis.__jobbdjungelnDb = createDatabase({ url, ...options });
   return globalThis.__jobbdjungelnDb;
 }
 

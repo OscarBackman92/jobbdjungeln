@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { detectKind, extractText, MAX_UPLOAD_BYTES, ResumeParseError } from './extract.ts';
 import {
   findSkills,
+  normalizeCapsTitle,
   parseEducation,
   parseExperience,
   parseResume,
@@ -67,6 +68,18 @@ describe('splitSections', () => {
   });
 });
 
+describe('normalizeCapsTitle', () => {
+  it('title-cases ALL CAPS roles and headlines', () => {
+    expect(normalizeCapsTitle('EKONOMIASSISTENT')).toBe('Ekonomiassistent');
+    expect(normalizeCapsTitle('SYSTEMUTVECKLARE BACKEND')).toBe('Systemutvecklare Backend');
+  });
+
+  it('leaves mixed-case text alone', () => {
+    expect(normalizeCapsTitle('Ekonomiassistent')).toBe('Ekonomiassistent');
+    expect(normalizeCapsTitle('iOS-utvecklare')).toBe('iOS-utvecklare');
+  });
+});
+
 describe('findSkills', () => {
   it('reads an explicit skills list, whatever the separator', () => {
     const skills = findSkills('', ['Excel • Fortnox • Visma', 'Bokföring, Attest']);
@@ -75,6 +88,12 @@ describe('findSkills', () => {
     expect(skills).toContain('Visma');
     expect(skills).toContain('Bokföring');
     expect(skills).toContain('Attest');
+  });
+
+  it('strips a leading label before the colon', () => {
+    const skills = findSkills('', ['Systemvana: Excel, Fortnox']);
+    expect(skills).toEqual(expect.arrayContaining(['Excel', 'Fortnox']));
+    expect(skills.some((skill) => /systemvana/i.test(skill))).toBe(false);
   });
 
   it('picks up known skills mentioned in the body text', () => {
@@ -136,6 +155,11 @@ describe('parseExperience', () => {
       'Attestflöden i Fortnox och avstämningar i Excel.',
     ]);
     expect(first?.skills).toEqual(expect.arrayContaining(['Fortnox', 'Excel']));
+  });
+
+  it('title-cases ALL CAPS roles', () => {
+    const [first] = parseExperience(['EKONOMIASSISTENT – Acme AB', '2020 – 2022']);
+    expect(first?.role).toBe('Ekonomiassistent');
   });
 
   it('ignores lines it cannot place rather than inventing an entry', () => {

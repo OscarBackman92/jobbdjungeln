@@ -163,6 +163,6 @@ export const periodKeySchema = z.string().regex(/^\d{4}-\d{2}$/, 'Ogiltig månad
 
 export const profileSchema = z.object({
   name: trimmed(120).default(''),
-  weeklySummaryOptIn: z.boolean().default(true),
+  weeklySummaryOptIn: z.boolean().default(false),
   reminderOptIn: z.boolean().default(true),
 });

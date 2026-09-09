@@ -12,6 +12,7 @@ const VALID = {
   AUTH_SECRET: 'a'.repeat(32),
   APP_URL: 'https://jobbdjungeln.example.test',
   CRON_SECRET: 'b'.repeat(16),
+  BREVO_API_KEY: 'xkeysib-test',
 };
 
 function messagesFor(input: Record<string, unknown>): string[] {
@@ -34,6 +35,14 @@ describe('miljökonfiguration', () => {
   it('vägrar produktion utan hemlighet för de schemalagda jobben', () => {
     const { CRON_SECRET: _omitted, ...utan } = VALID;
     expect(messagesFor(utan)).toContain('CRON_SECRET');
+  });
+
+  it('vägrar produktion utan e-postleverantör', () => {
+    const { BREVO_API_KEY: _omitted, ...utan } = VALID;
+    expect(messagesFor(utan)).toContain('BREVO_API_KEY');
+    expect(messagesFor({ ...utan, SMTP_URL: 'smtp://user:pass@mail.example.test:587' })).toEqual(
+      [],
+    );
   });
 
   it('vägrar produktion med testläget påslaget', () => {

@@ -61,6 +61,13 @@ const CANONICAL_GROUPS: readonly CanonicalGroup[] = [
 ];
 
 /**
+ * Language labels stay in the CV vocabulary but are excluded from ad
+ * requirement scoring — nearly every Swedish ad lists them, so they inflate
+ * the "missing" list without saying anything useful about fit.
+ */
+export const LANGUAGE_SKILL_LABELS: ReadonlySet<string> = new Set(['svenska', 'engelska']);
+
+/**
  * Canonical label (casefolded) → alternation of stems that should also match, so
  * Swedish inflections ("upphandlingar", "bokförare") hit the same requirement.
  */
@@ -102,6 +109,10 @@ export function canonicalSkillLabel(label: string): string {
   const text = label.trim();
   if (!text) return '';
   return ALIAS_TO_CANONICAL.get(text.toLowerCase()) ?? text;
+}
+
+export function isLanguageSkill(label: string): boolean {
+  return LANGUAGE_SKILL_LABELS.has(canonicalSkillLabel(label).toLowerCase());
 }
 
 /** All surface forms to search for when matching a skill against ad text. */

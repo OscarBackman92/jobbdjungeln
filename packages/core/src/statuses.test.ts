@@ -46,11 +46,14 @@ describe('transitions', () => {
     }
   });
 
-  it('lets a saved job be applied to or dropped, but not skipped ahead', () => {
+  it('lets a saved job be applied to or withdrawn, but not skipped ahead', () => {
     expect(isTransitionAllowed('wishlist', 'applied')).toBe(true);
     expect(isTransitionAllowed('wishlist', 'withdrawn')).toBe(true);
     expect(isTransitionAllowed('wishlist', 'interview')).toBe(false);
     expect(isTransitionAllowed('wishlist', 'offer')).toBe(false);
+    expect(isTransitionAllowed('wishlist', 'accepted')).toBe(false);
+    expect(isTransitionAllowed('wishlist', 'rejected')).toBe(false);
+    expect(allowedNextStatuses('wishlist')).toEqual(['applied', 'withdrawn']);
   });
 
   it('allows moving between statuses inside the same stage', () => {

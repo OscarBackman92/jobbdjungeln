@@ -174,7 +174,7 @@ export function ReportView({
           {formatShortDate(period.windowCloses)}
         </span>
 
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="no-print ml-auto flex flex-wrap gap-2">
           <Button size="sm" onClick={() => setAddingActivity(true)}>
             <Plus aria-hidden />
             Aktivitet
@@ -310,6 +310,7 @@ export function ReportView({
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="no-print"
                           disabled={pending || submitted}
                           onClick={() => toggleExclusion(row, true)}
                         >
@@ -340,6 +341,7 @@ export function ReportView({
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="no-print"
                     disabled={pending}
                     onClick={() => toggleExclusion(row, false)}
                   >

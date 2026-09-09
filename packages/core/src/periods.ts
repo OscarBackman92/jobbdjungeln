@@ -132,15 +132,41 @@ export const ACTIVITY_TYPE_LABELS: Readonly<Record<ActivityType, string>> = {
   ovrigt: 'Övrigt',
 };
 
-/** Column order of the AF activity form — the paste/CSV must match it exactly. */
+/**
+ * Columns for the CSV download — matches the on-screen table so rows stay
+ * distinguishable. Clipboard paste still uses {@link clipboardLine} (AF order).
+ */
 export const REPORT_COLUMNS = [
+  'Datum',
+  'Typ',
   'Yrkesroll',
-  'Arbetsgivaren',
+  'Arbetsgivare',
+  'Omfattning',
+  'Ort',
+  'Vad',
+  'Svarade på annons',
+] as const;
+
+/** AF paste order — keep stable for Mina sidor. */
+export const REPORT_CLIPBOARD_COLUMNS = [
+  'Yrkesroll',
+  'Arbetsgivare',
   'Omfattning',
   'Ort',
   'Svarade på annons',
   'Datum',
 ] as const;
+
+/** Prefer the period whose reporting window is open (or overdue), else current. */
+export function defaultPeriodKey(
+  periods: readonly { key: string; status: PeriodStatus }[],
+  fallback: string,
+): string {
+  const due =
+    periods.find((period) => period.status === 'klar') ??
+    periods.find((period) => period.status === 'forsenad');
+  return due?.key ?? periods.find((period) => period.status === 'pagaende')?.key ?? fallback;
+}
 
 export interface ReportRow {
   kind: 'job' | 'event' | 'activity';

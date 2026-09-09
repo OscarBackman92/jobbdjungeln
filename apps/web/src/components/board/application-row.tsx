@@ -4,6 +4,7 @@ import {
   formatRelativeDays,
   formatShortDate,
   isSafeExternalUrl,
+  savedDueDisplay,
   type Status,
 } from '@jobbdjungeln/core';
 import { AlertTriangle, CalendarClock, ExternalLink, MessageSquare, Pause } from 'lucide-react';
@@ -33,10 +34,12 @@ export function ApplicationRow({
   onOpen: (id: string) => void;
   showDeadline?: boolean;
 }) {
-  const due = showDeadline ? row.applyBy : row.nextActionAt;
+  const savedDue = showDeadline ? savedDueDisplay(row) : null;
+  const due = showDeadline ? savedDue?.date : row.nextActionAt;
   const dueOverdue = showDeadline
-    ? Boolean(row.applyBy && formatRelativeDays(row.applyBy).includes('sedan'))
+    ? Boolean(due && formatRelativeDays(due).includes('sedan'))
     : row.followUpOverdue;
+  const isReminder = savedDue?.source === 'reminder';
 
   return (
     <li
@@ -101,13 +104,32 @@ export function ApplicationRow({
         {due ? (
           <span
             className={cn(
-              'hidden items-center gap-1 text-[13px] sm:inline-flex',
-              dueOverdue ? 'text-warning-text' : 'text-subtle',
+              'hidden flex-col items-end gap-0 text-[13px] sm:inline-flex',
+              dueOverdue
+                ? 'text-warning-text'
+                : isReminder
+                  ? 'text-subtle'
+                  : 'text-muted',
             )}
-            title={showDeadline ? 'Sök senast' : 'Nästa steg'}
+            title={savedDue?.label ?? (showDeadline ? 'Sök senast' : 'Nästa steg')}
           >
-            <CalendarClock className="size-3.5" aria-hidden />
-            {formatShortDate(due)}
+            <span className="inline-flex items-center gap-1">
+              <CalendarClock
+                className={cn('size-3.5', isReminder && 'opacity-60')}
+                aria-hidden
+              />
+              <span className={cn(isReminder && 'border-b border-dashed border-current/40')}>
+                {formatRelativeDays(due)}
+              </span>
+            </span>
+            {savedDue ? (
+              <span className="text-[11px] text-subtle">
+                {savedDue.label}
+                {formatShortDate(due) ? ` · ${formatShortDate(due)}` : ''}
+              </span>
+            ) : (
+              <span className="text-[11px] text-subtle">{formatShortDate(due)}</span>
+            )}
           </span>
         ) : null}
 

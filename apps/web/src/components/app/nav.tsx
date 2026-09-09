@@ -48,6 +48,7 @@ export function SidebarNav({ badges }: { badges?: Partial<Record<NavItem['href']
           <Link
             key={href}
             href={href}
+            prefetch={false}
             aria-current={active ? 'page' : undefined}
             className={cn(
               'group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm font-medium transition-colors',
@@ -73,8 +74,8 @@ export function SidebarNav({ badges }: { badges?: Partial<Record<NavItem['href']
 /**
  * The bottom bar on a phone.
  *
- * Five destinations at thumb height, with the safe-area inset respected so the
- * last row is not hidden behind the home indicator.
+ * All six destinations at thumb height, with the safe-area inset respected so
+ * the last row is not hidden behind the home indicator.
  */
 export function MobileNav({ badges }: { badges?: Partial<Record<NavItem['href'], number>> }) {
   const isActive = useIsActive();
@@ -85,36 +86,35 @@ export function MobileNav({ badges }: { badges?: Partial<Record<NavItem['href'],
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-raised/95 backdrop-blur lg:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <ul className="grid grid-cols-5">
-        {NAV_ITEMS.filter((item) => item.href !== '/profil').map(
-          ({ href, label, icon: Icon }) => {
-            const active = isActive(href);
-            const badge = badges?.[href];
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'relative flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-medium transition-colors',
-                    active ? 'text-brand-text' : 'text-subtle',
-                  )}
-                >
-                  <span className="relative">
-                    <Icon className="size-5" aria-hidden />
-                    {badge ? (
-                      <span className="absolute -top-1 -right-2 min-w-4 rounded-full bg-warning px-1 text-[10px] leading-4 font-semibold text-white">
-                        {badge}
-                        <span className="sr-only"> behöver uppmärksamhet</span>
-                      </span>
-                    ) : null}
-                  </span>
-                  {label}
-                </Link>
-              </li>
-            );
-          },
-        )}
+      <ul className="grid grid-cols-6">
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href);
+          const badge = badges?.[href];
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                prefetch={false}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[10px] leading-tight font-medium transition-colors',
+                  active ? 'text-brand-text' : 'text-subtle',
+                )}
+              >
+                <span className="relative">
+                  <Icon className="size-5" aria-hidden />
+                  {badge ? (
+                    <span className="absolute -top-1 -right-2 min-w-4 rounded-full bg-warning px-1 text-[10px] leading-4 font-semibold text-white">
+                      {badge}
+                      <span className="sr-only"> behöver uppmärksamhet</span>
+                    </span>
+                  ) : null}
+                </span>
+                {label}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

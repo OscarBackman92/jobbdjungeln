@@ -5,7 +5,14 @@
  * All of it is computed, never stored, so a row is never stale on read.
  */
 
-import { addDays, daysBetween, type IsoDate, today as todayIso } from './dates.ts';
+import {
+  addDays,
+  daysBetween,
+  type IsoDate,
+  monthHeading,
+  parseIsoDate,
+  today as todayIso,
+} from './dates.ts';
 import { isClosed, type Status, stageForStatus } from './statuses.ts';
 
 /** Days without a reply before an application is flagged as waiting too long. */
@@ -20,6 +27,8 @@ export interface LifecycleInput {
   appliedAt: IsoDate | null;
   deadline: IsoDate | null;
   applyBy: IsoDate | null;
+  /** True when applyBy was invented by the app (+14 days), not set by the employer. */
+  applyByIsAuto?: boolean;
   nextActionAt: IsoDate | null;
   lastActivityAt: IsoDate | null;
   intent: Intent;
@@ -102,44 +111,100 @@ export function deriveApplyBy(input: {
   return { applyBy: addDays(input.createdAt, AUTO_APPLY_BY_DAYS), isAuto: true };
 }
 
+/**
+ * The employer's real last day, if any.
+ * An auto-generated applyBy must never be treated as a real deadline.
+ */
+export function realDeadline(
+  row: Pick<LifecycleInput, 'deadline' | 'applyBy' | 'applyByIsAuto'>,
+): IsoDate | null {
+  if (row.deadline) return row.deadline;
+  if (row.applyBy && !row.applyByIsAuto) return row.applyBy;
+  return null;
+}
+
+/** What to show in the date column for a saved job. */
+export function savedDueDisplay(
+  row: Pick<LifecycleInput, 'deadline' | 'applyBy' | 'applyByIsAuto'>,
+): {
+  date: IsoDate;
+  source: 'deadline' | 'reminder';
+  label: string;
+} | null {
+  if (row.deadline) {
+    return { date: row.deadline, source: 'deadline', label: 'sista dag' };
+  }
+  if (row.applyBy) {
+    return {
+      date: row.applyBy,
+      source: row.applyByIsAuto ? 'reminder' : 'deadline',
+      label: row.applyByIsAuto ? 'din påminnelse' : 'sök senast',
+    };
+  }
+  return null;
+}
+
 /** Lanes on "Sparade jobb", in display order. */
 export const SAVED_LANES = [
-  'brattom',
-  'denna_manad',
+  'utgangna',
+  'idag_imorgon',
+  'denna_vecka',
+  'senare_manad',
+  'langre_fram',
   'utan_datum',
   'pa_is',
-  'utgangna',
 ] as const;
 export type SavedLane = (typeof SAVED_LANES)[number];
 
 export const SAVED_LANE_LABELS: Readonly<Record<SavedLane, string>> = {
-  brattom: 'Bråttom',
-  denna_manad: 'Den här månaden',
+  utgangna: 'Utgångna',
+  idag_imorgon: 'Idag–imorgon',
+  denna_vecka: 'Denna vecka',
+  senare_manad: 'Senare i månaden',
+  langre_fram: 'Längre fram',
   utan_datum: 'Utan sista dag',
   pa_is: 'Lagt på is',
-  utgangna: 'Utgångna',
 };
 
 export const SAVED_LANE_HINTS: Readonly<Record<SavedLane, string>> = {
-  brattom: 'Sök inom en vecka',
-  denna_manad: 'Gott om tid ännu',
-  utan_datum: 'Ingen sista ansökningsdag',
-  pa_is: 'Väntar på beslut från dig',
   utgangna: 'Sista dagen har passerat',
+  idag_imorgon: 'Måste sökas nu',
+  denna_vecka: 'Inom sju dagar',
+  senare_manad: 'Före månadsskifte',
+  langre_fram: 'Längre än innevarande månad',
+  utan_datum: 'Ingen sista ansökningsdag — sätt en påminnelse om du vill',
+  pa_is: 'Väntar på beslut från dig',
 };
 
-const URGENT_WITHIN_DAYS = 7;
+/** Dynamic lane title — "Senare i september" when we know the month. */
+export function savedLaneLabel(lane: SavedLane, today: IsoDate = todayIso()): string {
+  if (lane === 'senare_manad') {
+    const { month } = parseIsoDate(today);
+    return `Senare i ${monthHeading(month).toLowerCase()}`;
+  }
+  return SAVED_LANE_LABELS[lane];
+}
 
 export function savedLaneFor(
-  row: Pick<LifecycleInput, 'intent' | 'applyBy'>,
+  row: Pick<LifecycleInput, 'intent' | 'applyBy' | 'deadline' | 'applyByIsAuto'>,
   today: IsoDate = todayIso(),
 ): SavedLane {
   if (row.intent === 'paused') return 'pa_is';
-  if (!row.applyBy) return 'utan_datum';
-  const daysLeft = daysBetween(today, row.applyBy);
+
+  const due = realDeadline(row);
+  if (!due) return 'utan_datum';
+
+  const daysLeft = daysBetween(today, due);
   if (daysLeft < 0) return 'utgangna';
-  if (daysLeft <= URGENT_WITHIN_DAYS) return 'brattom';
-  return 'denna_manad';
+  if (daysLeft <= 1) return 'idag_imorgon';
+  if (daysLeft <= 7) return 'denna_vecka';
+
+  const todayParts = parseIsoDate(today);
+  const dueParts = parseIsoDate(due);
+  if (dueParts.year === todayParts.year && dueParts.month === todayParts.month) {
+    return 'senare_manad';
+  }
+  return 'langre_fram';
 }
 
 /** Lanes on "Ansökningar", in display order. */
@@ -197,9 +262,26 @@ export function employerKey(name: string): string {
     .toLowerCase();
 }
 
+/** Normalised role for duplicate detection. */
+export function roleKey(title: string): string {
+  return (title ?? '')
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 /** Salary expectation is asked for at the moment of applying, not before. */
 export const SALARY_CLAIM_MAX_LENGTH = 80;
 
+/** Sentinel when the user explicitly skips stating a salary. */
+export const SALARY_CLAIM_NONE = 'Angav ingen lön';
+
+/**
+ * Salary is prompted when moving to applied, but may be skipped with
+ * {@link SALARY_CLAIM_NONE}. Never required for closed outcomes.
+ */
 export function requiresSalaryClaim(status: Status): boolean {
   return (
     stageForStatus(status) !== 'bevakad' &&
@@ -215,7 +297,17 @@ export function salaryClaimMissingOnApply(input: {
   salaryClaim: string;
   previousStatus?: Status | null;
 }): boolean {
-  if (!requiresSalaryClaim(input.status) || input.salaryClaim.trim()) return false;
-  if (input.previousStatus == null) return true;
-  return !requiresSalaryClaim(input.previousStatus);
+  // Salary is prompted in the UI but never hard-required — empty means
+  // "not stated", same as choosing „Angav ingen lön”.
+  void input;
+  return false;
+}
+
+/** Accept digits with optional unit, or the explicit skip sentinel. */
+export function isValidSalaryClaim(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed === SALARY_CLAIM_NONE) return true;
+  // Allow forms like "32000", "32 000 kr", "ca 35 000/mån"
+  return /\d/.test(trimmed) && trimmed.length <= SALARY_CLAIM_MAX_LENGTH;
 }

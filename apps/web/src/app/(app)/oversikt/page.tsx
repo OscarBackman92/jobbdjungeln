@@ -41,10 +41,26 @@ const ACTION_LABELS = {
   deadline: 'Sista ansökningsdag',
 } as const;
 
+function savedHint(lanes: {
+  utgangna: number;
+  idag_imorgon: number;
+  denna_vecka: number;
+}): string {
+  const expired = lanes.utgangna;
+  const urgent = lanes.idag_imorgon + lanes.denna_vecka;
+  if (expired > 0 && urgent > 0) {
+    return `${plural(expired, 'utgången', 'utgångna')}, ${urgent} brådskar`;
+  }
+  if (expired > 0) return plural(expired, 'utgången', 'utgångna');
+  if (urgent > 0) return `${urgent} brådskar`;
+  return 'inget brådskar';
+}
+
 export default async function OverviewPage() {
   const user = await requireUser();
   const summary = await dashboard(user.id);
   const nothingYet = summary.saved === 0 && summary.active === 0 && summary.closed === 0;
+  const paceLabel = summary.pace.toFixed(1).replace('.', ',');
 
   return (
     <>
@@ -68,16 +84,12 @@ export default async function OverviewPage() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-5">
           <section aria-label="Nyckeltal" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatTile
               label="Sparade jobb"
               value={summary.saved}
-              hint={
-                summary.savedLanes.brattom > 0
-                  ? `${summary.savedLanes.brattom} bråttom`
-                  : 'inget brådskar'
-              }
+              hint={savedHint(summary.savedLanes)}
               href="/sparade"
               icon={Bookmark}
             />
@@ -99,55 +111,61 @@ export default async function OverviewPage() {
             <StatTile
               label="Svarsfrekvens"
               value={summary.responseRate === null ? '–' : `${summary.responseRate}%`}
-              hint={`${summary.pace} ansökningar/vecka`}
+              hint={
+                summary.responseRate === null
+                  ? 'för få ansökningar än'
+                  : `${paceLabel} ansökningar/vecka`
+              }
               icon={TrendingUp}
             />
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
+          <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+            <Card className="min-w-0">
               <CardHeader>
                 <CardTitle>Nästa steg</CardTitle>
                 <CardDescription>Det som har en dag satt för sig.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="min-w-0">
                 {summary.nextActions.length === 0 ? (
                   <p className="py-4 text-sm text-muted">
                     Inget inplanerat. Sätt en uppföljningsdag på en ansökan så dyker den upp
                     här.
                   </p>
                 ) : (
-                  <ul className="flex flex-col divide-y divide-line">
+                  <ul className="flex min-w-0 flex-col divide-y divide-line">
                     {summary.nextActions.map((action) => (
                       <li
                         key={`${action.id}-${action.kind}`}
-                        className="flex items-center gap-3 py-2.5 first:pt-0"
+                        className="flex min-w-0 flex-col gap-1 py-2.5 first:pt-0 sm:flex-row sm:items-center sm:gap-3"
                       >
-                        <CalendarClock
-                          className={
-                            action.overdue
-                              ? 'size-4 shrink-0 text-warning'
-                              : 'size-4 shrink-0 text-subtle'
-                          }
-                          aria-hidden
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-ink">
-                            {action.title}
-                          </p>
-                          <p className="truncate text-[13px] text-subtle">{action.company}</p>
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                          <CalendarClock
+                            className={
+                              action.overdue
+                                ? 'mt-0.5 size-4 shrink-0 text-warning'
+                                : 'mt-0.5 size-4 shrink-0 text-subtle'
+                            }
+                            aria-hidden
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-ink">
+                              {action.title}
+                            </p>
+                            <p className="truncate text-[13px] text-subtle">{action.company}</p>
+                          </div>
                         </div>
-                        <div className="shrink-0 text-right">
+                        <div className="min-w-0 pl-7 sm:shrink-0 sm:pl-0 sm:text-right">
                           <p
                             className={
                               action.overdue
-                                ? 'text-[13px] font-medium text-warning-text'
-                                : 'text-[13px] text-muted'
+                                ? 'truncate text-[13px] font-medium text-warning-text'
+                                : 'truncate text-[13px] text-muted'
                             }
                           >
                             {formatRelativeDays(action.due)}
                           </p>
-                          <p className="text-[11px] text-subtle">
+                          <p className="truncate text-[11px] text-subtle">
                             {ACTION_LABELS[action.kind]} {formatShortDate(action.due)}
                           </p>
                         </div>
@@ -158,7 +176,7 @@ export default async function OverviewPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="min-w-0">
               <CardHeader>
                 <CardTitle>Från sökt till erbjudande</CardTitle>
                 <CardDescription>Hur långt dina ansökningar har kommit.</CardDescription>
@@ -168,7 +186,7 @@ export default async function OverviewPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="min-w-0">
               <CardHeader>
                 <CardTitle>Sökta jobb per månad</CardTitle>
                 <CardDescription>De senaste sex månaderna.</CardDescription>
@@ -178,7 +196,7 @@ export default async function OverviewPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="min-w-0">
               <CardHeader>
                 <CardTitle>Så här har det gått</CardTitle>
                 <CardDescription>Avslutade ansökningar, per utfall.</CardDescription>
@@ -214,7 +232,11 @@ export default async function OverviewPage() {
                 {Object.entries(summary.savedLanes).map(([lane, count]) => (
                   <Badge
                     key={lane}
-                    tone={lane === 'brattom' && count > 0 ? 'warning' : 'neutral'}
+                    tone={
+                      (lane === 'utgangna' || lane === 'idag_imorgon') && count > 0
+                        ? 'warning'
+                        : 'neutral'
+                    }
                   >
                     {SAVED_LANE_LABELS[lane as keyof typeof SAVED_LANE_LABELS]} {count}
                   </Badge>

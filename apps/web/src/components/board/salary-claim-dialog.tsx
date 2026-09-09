@@ -1,6 +1,10 @@
 'use client';
 
-import { SALARY_CLAIM_MAX_LENGTH } from '@jobbdjungeln/core';
+import {
+  isValidSalaryClaim,
+  SALARY_CLAIM_MAX_LENGTH,
+  SALARY_CLAIM_NONE,
+} from '@jobbdjungeln/core';
 import { useState } from 'react';
 import {
   Button,
@@ -18,9 +22,8 @@ import {
 /**
  * Asked once, at the moment of applying.
  *
- * The salary expectation is worth recording because it is impossible to
- * reconstruct later — and it is the number people most often wish they had
- * written down when the recruiter finally calls.
+ * Optional — many ads never ask for a number. Skip with {@link SALARY_CLAIM_NONE}
+ * so the field is never filled with garbage just to get past the prompt.
  */
 export function SalaryClaimDialog({
   open,
@@ -36,13 +39,18 @@ export function SalaryClaimDialog({
   const [claim, setClaim] = useState('');
   const [error, setError] = useState<string | undefined>();
 
-  function submit() {
-    if (!claim.trim()) {
-      setError('Skriv vad du begärde, även om det var ungefärligt.');
+  function submit(value: string = claim) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setError('Ange ett belopp, eller välj „Angav ingen lön”.');
+      return;
+    }
+    if (!isValidSalaryClaim(trimmed)) {
+      setError('Ange ett belopp med siffror, till exempel 45 000 kr/mån.');
       return;
     }
     setError(undefined);
-    onSubmit(claim.trim());
+    onSubmit(trimmed);
   }
 
   return (
@@ -51,11 +59,11 @@ export function SalaryClaimDialog({
         <DialogHeader>
           <DialogTitle>Vad begärde du i lön?</DialogTitle>
           <DialogDescription>
-            Sparas på ansökan så du vet vad du sagt när rekryteraren hör av sig.
+            Frivilligt — sparas på ansökan så du vet vad du sagt när rekryteraren hör av sig.
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <Field label="Löneanspråk" error={error} required>
+          <Field label="Löneanspråk" error={error} hint="Hoppa över om annonsen inte frågade.">
             {(props) => (
               <Input
                 {...props}
@@ -73,7 +81,10 @@ export function SalaryClaimDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Avbryt
           </Button>
-          <Button variant="primary" loading={pending} onClick={submit}>
+          <Button variant="ghost" disabled={pending} onClick={() => submit(SALARY_CLAIM_NONE)}>
+            Angav ingen lön
+          </Button>
+          <Button variant="primary" loading={pending} onClick={() => submit()}>
             Spara och flytta
           </Button>
         </DialogFooter>

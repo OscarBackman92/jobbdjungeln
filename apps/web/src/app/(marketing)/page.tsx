@@ -19,7 +19,7 @@ const FEATURES = [
   {
     icon: Bookmark,
     title: 'Sparade jobb, sorterade efter tid',
-    body: 'Wishlistan grupperas efter hur bråttom det är: utgångna, bråttom, den här månaden, utan sista dag, lagda på is.',
+    body: 'Wishlistan grupperas efter hur bråttom det är: utgångna, idag–imorgon, denna vecka, senare i månaden, längre fram, utan sista dag och lagda på is.',
   },
   {
     icon: CalendarClock,
@@ -43,12 +43,34 @@ const FEATURES = [
   },
 ] as const;
 
+const MOCK_SAVED = [
+  {
+    lane: 'Idag–imorgon',
+    tone: 'text-danger-text',
+    rows: [
+      { title: 'Ekonomiassistent', company: 'Acme AB', due: 'Imorgon' },
+      { title: 'Löneadministratör', company: 'Nordic Retail', due: 'Idag' },
+    ],
+  },
+  {
+    lane: 'Denna vecka',
+    tone: 'text-warning-text',
+    rows: [{ title: 'Controller', company: 'Stadskansliet', due: 'Fredag' }],
+  },
+  {
+    lane: 'Utan sista dag',
+    tone: 'text-muted',
+    rows: [{ title: 'Redovisningsekonom', company: 'Byrå X', due: 'Sätt påminnelse' }],
+  },
+] as const;
+
 export default async function LandingPage() {
   const user = await currentUser();
 
   return (
     <div className="flex flex-col gap-14">
       <section className="flex flex-col items-start gap-5 pt-6">
+        <p className="text-sm font-semibold tracking-wide text-brand-text">Jobbdjungeln</p>
         <h1 className="text-3xl font-semibold tracking-tight text-balance text-ink sm:text-4xl">
           Koll på hela ditt jobbsök — utan Excel-arket
         </h1>
@@ -67,6 +89,45 @@ export default async function LandingPage() {
           <Button size="lg" variant="secondary" asChild>
             <Link href="/om">Hur funkar det?</Link>
           </Button>
+        </div>
+      </section>
+
+      <section
+        aria-label="Förhandsvisning av sparade jobb"
+        className="relative left-1/2 w-screen max-w-[100vw] -translate-x-1/2 border-y border-line bg-sunken"
+      >
+        <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+          <p className="text-[13px] font-medium tracking-wide text-brand-text uppercase">
+            Sparade
+          </p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">
+            Deadlines sorterade så du ser vad som brinner
+          </h2>
+          <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
+            En lista, flera fack — utgångna först, sedan idag–imorgon och resten av veckan.
+          </p>
+
+          <div className="mt-6 flex flex-col gap-5">
+            {MOCK_SAVED.map((group) => (
+              <div key={group.lane}>
+                <div className={`mb-2 text-[13px] font-semibold ${group.tone}`}>{group.lane}</div>
+                <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line bg-raised">
+                  {group.rows.map((row) => (
+                    <li
+                      key={`${row.title}-${row.company}`}
+                      className="flex items-baseline justify-between gap-4 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-[15px] font-medium text-ink">{row.title}</div>
+                        <div className="truncate text-sm text-muted">{row.company}</div>
+                      </div>
+                      <div className="shrink-0 text-[13px] text-subtle">{row.due}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

@@ -40,6 +40,7 @@ export interface BoardRow {
   appliedAt: IsoDate | null;
   deadline: IsoDate | null;
   applyBy: IsoDate | null;
+  applyByIsAuto: boolean;
   nextActionAt: IsoDate | null;
   lastActivityAt: IsoDate | null;
   salaryClaim: string;
@@ -68,6 +69,7 @@ const rowColumns = {
   appliedAt: schema.applications.appliedAt,
   deadline: schema.applications.deadline,
   applyBy: schema.applications.applyBy,
+  applyByIsAuto: schema.applications.applyByIsAuto,
   nextActionAt: schema.applications.nextActionAt,
   lastActivityAt: schema.applications.lastActivityAt,
   salaryClaim: schema.applications.salaryClaim,
@@ -143,11 +145,13 @@ export async function savedBoard(
     );
 
   const lanes: Record<SavedLane, BoardRow[]> = {
-    brattom: [],
-    denna_manad: [],
+    utgangna: [],
+    idag_imorgon: [],
+    denna_vecka: [],
+    senare_manad: [],
+    langre_fram: [],
     utan_datum: [],
     pa_is: [],
-    utgangna: [],
   };
 
   for (const raw of rows as unknown as Array<Parameters<typeof decorate>[0]>) {
@@ -209,6 +213,7 @@ export async function dashboard(userId: string, today: IsoDate = todayIso()) {
       intent: schema.applications.intent,
       appliedAt: schema.applications.appliedAt,
       applyBy: schema.applications.applyBy,
+      applyByIsAuto: schema.applications.applyByIsAuto,
       deadline: schema.applications.deadline,
       nextActionAt: schema.applications.nextActionAt,
       lastActivityAt: schema.applications.lastActivityAt,

@@ -43,3 +43,4 @@ export {
   SelectTrigger,
   SelectValue,
 } from './select.tsx';
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './popover.tsx';

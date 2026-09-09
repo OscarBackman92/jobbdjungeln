@@ -113,12 +113,14 @@ export async function createApplication(
   );
   const adUrlKey = normalizeAdUrl(input.adUrl ?? '');
 
-  // A saved job gets a "search by" date; an applied one gets today's date.
-  const applyBy =
-    input.applyBy ??
-    deriveApplyBy({ status: input.status, deadline: input.deadline ?? null, createdAt: today })
-      ?.applyBy ??
-    null;
+  const applyDerived = deriveApplyBy({
+    status: input.status,
+    deadline: input.deadline ?? null,
+    createdAt: today,
+  });
+  const applyBy = input.applyBy ?? applyDerived?.applyBy ?? null;
+  const applyByIsAuto =
+    input.applyBy != null ? false : (applyDerived?.isAuto ?? false);
   const appliedAt =
     input.appliedAt ?? (stageForStatus(input.status) === 'bevakad' ? null : today);
 
@@ -138,7 +140,7 @@ export async function createApplication(
       status: input.status,
       ...derived,
       applyBy,
-      applyByIsAuto: input.applyBy == null,
+      applyByIsAuto,
       appliedAt,
       deadline: input.deadline ?? null,
       nextActionAt: input.nextActionAt ?? null,
@@ -228,13 +230,20 @@ export async function addEvent(
 
 /** Every ad URL the user tracks, archived rows included — for duplicate warnings. */
 export async function trackedAdUrls(userId: string): Promise<string[]> {
-  const rows = await db()
-    .select({ key: schema.applications.adUrlKey })
+  const rows = await trackedAds(userId);
+  return rows.map((row) => row.key);
+}
+
+/** Ad URL keys mapped to application ids, for save/unsave toggles. */
+export async function trackedAds(
+  userId: string,
+): Promise<Array<{ key: string; id: string }>> {
+  return db()
+    .select({ key: schema.applications.adUrlKey, id: schema.applications.id })
     .from(schema.applications)
     .where(
       and(eq(schema.applications.userId, userId), sql`${schema.applications.adUrlKey} <> ''`),
     );
-  return rows.map((row) => row.key);
 }
 
 /** Rows the user has not archived. */

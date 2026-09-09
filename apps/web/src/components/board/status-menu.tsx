@@ -2,6 +2,7 @@
 
 import {
   allowedNextStatuses,
+  requiresSalaryClaim,
   STATUS_LABELS,
   type Status,
   stageForStatus,
@@ -36,14 +37,18 @@ export function StatusMenu({
 
   function apply(next: Status, claim?: string) {
     startTransition(async () => {
-      const result = await changeStatusAction({ id, status: next, salaryClaim: claim });
-      if (result.ok) {
-        toast.success(`Flyttad till ${STATUS_LABELS[next]}`);
-        setAskingFor(null);
-      } else if (result.fieldErrors?.salaryClaim) {
-        setAskingFor(next);
-      } else {
-        toast.error(result.error);
+      try {
+        const result = await changeStatusAction({ id, status: next, salaryClaim: claim });
+        if (result.ok) {
+          toast.success(`Flyttad till ${STATUS_LABELS[next]}`);
+          setAskingFor(null);
+        } else if (result.fieldErrors?.salaryClaim) {
+          setAskingFor(next);
+        } else {
+          toast.error(result.error);
+        }
+      } catch {
+        toast.error('Kunde inte uppdatera statusen. Prova igen.');
       }
     });
   }
@@ -51,7 +56,7 @@ export function StatusMenu({
   function select(next: Status) {
     const leavingWishlist =
       stageForStatus(status) === 'bevakad' && stageForStatus(next) !== 'bevakad';
-    if (leavingWishlist && !salaryClaim.trim()) {
+    if (leavingWishlist && requiresSalaryClaim(next) && !salaryClaim.trim()) {
       setAskingFor(next);
       return;
     }
@@ -63,7 +68,7 @@ export function StatusMenu({
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
           disabled={pending}
-          className="inline-flex items-center gap-1 rounded-full outline-none disabled:opacity-60"
+          className="inline-flex min-h-6 min-w-6 items-center justify-center gap-1 rounded-full p-0.5 outline-none disabled:opacity-60"
           aria-label={`Status: ${STATUS_LABELS[status]}. Ändra`}
         >
           <Badge tone={statusTone(status)}>

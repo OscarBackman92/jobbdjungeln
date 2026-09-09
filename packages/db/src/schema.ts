@@ -76,7 +76,7 @@ export const users = pgTable(
     /** Idempotency guard for the Monday digest. */
     weeklySummarySentAt: timestamp({ withTimezone: true }),
     lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-    weeklySummaryOptIn: boolean().notNull().default(true),
+    weeklySummaryOptIn: boolean().notNull().default(false),
     reminderOptIn: boolean().notNull().default(true),
   },
   (table) => [

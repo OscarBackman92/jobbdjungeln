@@ -49,6 +49,15 @@ export interface JobAd {
   scopeOfWorkMax: number | null;
 }
 
+/** Sort options supported by JobTech search. */
+export const SEARCH_SORTS = [
+  'pubdate-desc',
+  'relevance',
+  'applydate-asc',
+  'applydate-desc',
+] as const;
+export type SearchSort = (typeof SEARCH_SORTS)[number];
+
 export interface SearchParams {
   q?: string;
   regions?: readonly string[];
@@ -56,6 +65,17 @@ export interface SearchParams {
   fields?: readonly string[];
   groups?: readonly string[];
   remote?: boolean;
+  /** JobTech sort — defaults to newest first. */
+  sort?: SearchSort;
+  /**
+   * Ads published after this point. ISO datetime (`YYYY-mm-ddTHH:MM:SS`) or
+   * minutes as a number string (e.g. `"10080"` = last 7 days).
+   */
+  publishedAfter?: string;
+  /** Pass `false` to keep only ads that do not require experience. */
+  experience?: boolean;
+  /** Employment-type taxonomy concept ids. */
+  employmentType?: readonly string[];
   offset?: number;
   limit?: number;
 }
@@ -218,7 +238,10 @@ export function createJobTechClient(options: JobTechClientOptions = {}) {
       const query = new URLSearchParams();
       query.set('offset', String(Math.max(0, params.offset ?? 0)));
       query.set('limit', String(Math.min(Math.max(1, params.limit ?? 25), MAX_LIMIT)));
-      query.set('sort', 'pubdate-desc');
+      const sort = SEARCH_SORTS.includes(params.sort as SearchSort)
+        ? (params.sort as SearchSort)
+        : 'pubdate-desc';
+      query.set('sort', sort);
 
       const q = (params.q ?? '').trim();
       if (q) query.set('q', expandSwedishQuery(q));
@@ -241,6 +264,15 @@ export function createJobTechClient(options: JobTechClientOptions = {}) {
       }
 
       if (params.remote) query.set('remote', 'true');
+
+      const publishedAfter = (params.publishedAfter ?? '').trim();
+      if (publishedAfter) query.set('published-after', publishedAfter);
+
+      if (params.experience === false) query.set('experience', 'false');
+
+      for (const id of validConceptIds(params.employmentType ?? [])) {
+        query.append('employment-type', id);
+      }
 
       const payload = await getJson(`${config.searchUrl}?${query}`);
       const parsed = jobTechSearchResponseSchema.safeParse(payload);

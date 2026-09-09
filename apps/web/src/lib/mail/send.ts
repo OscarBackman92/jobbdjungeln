@@ -6,8 +6,8 @@ import { env } from '../env.ts';
  *
  * Brevo's HTTP API is preferred because SMTP ports are blocked on most hosting
  * platforms; plain SMTP is the fallback. With neither configured, mail is logged
- * to the server console — which is what makes local development work with no
- * setup at all, and is also why production refuses to start without one.
+ * to the server console — fine for local development. Production refuses to
+ * start without a provider (see env.ts).
  */
 
 export interface Mail {
@@ -27,6 +27,7 @@ function parseAddress(value: string): { name?: string; email: string } {
 }
 
 async function sendViaBrevo(mail: Mail, apiKey: string): Promise<void> {
+  const sender = parseAddress(env().EMAIL_FROM);
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -35,7 +36,7 @@ async function sendViaBrevo(mail: Mail, apiKey: string): Promise<void> {
       accept: 'application/json',
     },
     body: JSON.stringify({
-      sender: parseAddress(env().EMAIL_FROM),
+      sender,
       to: [{ email: mail.to }],
       subject: mail.subject,
       htmlContent: mail.html,
@@ -44,9 +45,32 @@ async function sendViaBrevo(mail: Mail, apiKey: string): Promise<void> {
     signal: AbortSignal.timeout(15_000),
   });
 
+  const body = await response.text();
   if (!response.ok) {
-    throw new Error(`Brevo svarade ${response.status}: ${await response.text()}`);
+    throw new Error(`Brevo svarade ${response.status}: ${body}`);
   }
+
+  let messageId: string | undefined;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'messageId' in parsed &&
+      typeof parsed.messageId === 'string'
+    ) {
+      messageId = parsed.messageId;
+    }
+  } catch {
+    // Brevo sometimes returns an empty body; delivery still succeeded.
+  }
+
+  console.info('[mail] skickat via Brevo', {
+    to: mail.to,
+    subject: mail.subject,
+    from: sender.email,
+    messageId,
+  });
 }
 
 async function sendViaSmtp(mail: Mail, url: string): Promise<void> {

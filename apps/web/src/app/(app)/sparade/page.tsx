@@ -1,4 +1,4 @@
-import { SAVED_LANE_HINTS, SAVED_LANE_LABELS, type SavedLane } from '@jobbdjungeln/core';
+import { SAVED_LANE_HINTS, type SavedLane, savedLaneLabel } from '@jobbdjungeln/core';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
@@ -14,8 +14,10 @@ export const metadata: Metadata = { title: 'Sparade jobb' };
 /** Urgent first: the whole point of the view is what runs out soonest. */
 const LANE_ORDER: readonly SavedLane[] = [
   'utgangna',
-  'brattom',
-  'denna_manad',
+  'idag_imorgon',
+  'denna_vecka',
+  'senare_manad',
+  'langre_fram',
   'utan_datum',
   'pa_is',
 ];
@@ -32,9 +34,9 @@ async function SavedBoard({
 
   const specs: LaneSpec[] = LANE_ORDER.map((lane) => ({
     key: lane,
-    title: SAVED_LANE_LABELS[lane],
+    title: savedLaneLabel(lane),
     hint: SAVED_LANE_HINTS[lane],
-    tone: lane === 'brattom' || lane === 'utgangna' ? 'warning' : 'neutral',
+    tone: lane === 'utgangna' || lane === 'idag_imorgon' ? 'warning' : 'neutral',
     defaultOpen: lane !== 'pa_is',
     rows: lanes[lane],
   }));

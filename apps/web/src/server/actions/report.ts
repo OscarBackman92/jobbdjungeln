@@ -170,6 +170,12 @@ export async function saveActivityAction(
     linked = row?.id ?? null;
   }
 
+  const occurredOn = values.occurredOn;
+  const [activityYear, activityMonth] = occurredOn.split('-').map(Number) as [number, number];
+  if (activityYear && activityMonth) {
+    await periodRow(user.id, `${activityYear}-${`${activityMonth}`.padStart(2, '0')}`);
+  }
+
   if (id) {
     const [row] = await db()
       .update(schema.activities)

@@ -6,6 +6,7 @@ import {
   isFollowUpOverdue,
   isOverdue,
   isStale,
+  isValidSalaryClaim,
   requiresSalaryClaim,
   salaryClaimMissingOnApply,
   savedLaneFor,
@@ -92,19 +93,40 @@ describe('deriveApplyBy', () => {
 });
 
 describe('saved lanes', () => {
-  const lane = (applyBy: string | null, intent: 'active' | 'paused' = 'active') =>
-    savedLaneFor({ intent, applyBy }, TODAY);
+  const lane = (
+    applyBy: string | null,
+    intent: 'active' | 'paused' = 'active',
+    extra: { deadline?: string | null; applyByIsAuto?: boolean } = {},
+  ) =>
+    savedLaneFor(
+      {
+        intent,
+        applyBy,
+        deadline: extra.deadline ?? null,
+        applyByIsAuto: extra.applyByIsAuto,
+      },
+      TODAY,
+    );
 
-  it('sorts by urgency', () => {
-    expect(lane('2026-06-14')).toBe('utgangna');
-    expect(lane(TODAY)).toBe('brattom');
-    expect(lane('2026-06-22')).toBe('brattom'); // exactly 7 days
-    expect(lane('2026-06-23')).toBe('denna_manad');
+  it('sorts by real deadline urgency', () => {
+    expect(lane('2026-06-14', 'active', { applyByIsAuto: false })).toBe('utgangna');
+    expect(lane(TODAY, 'active', { applyByIsAuto: false })).toBe('idag_imorgon');
+    expect(lane('2026-06-16', 'active', { applyByIsAuto: false })).toBe('idag_imorgon');
+    expect(lane('2026-06-22', 'active', { applyByIsAuto: false })).toBe('denna_vecka');
+    expect(lane('2026-06-25', 'active', { applyByIsAuto: false })).toBe('senare_manad');
+    expect(lane('2026-07-20', 'active', { applyByIsAuto: false })).toBe('langre_fram');
     expect(lane(null)).toBe('utan_datum');
   });
 
+  it('treats auto apply_by as no real deadline', () => {
+    expect(lane('2026-06-29', 'active', { applyByIsAuto: true })).toBe('utan_datum');
+    expect(
+      lane('2026-06-29', 'active', { deadline: '2026-06-20', applyByIsAuto: true }),
+    ).toBe('denna_vecka');
+  });
+
   it('puts paused rows on ice regardless of date', () => {
-    expect(lane('2026-06-01', 'paused')).toBe('pa_is');
+    expect(lane('2026-06-01', 'paused', { applyByIsAuto: false })).toBe('pa_is');
     expect(lane(null, 'paused')).toBe('pa_is');
   });
 });
@@ -144,47 +166,24 @@ describe('employerKey', () => {
 });
 
 describe('salary claim', () => {
-  it('is asked for once the user has actually applied', () => {
+  it('is prompted for once the user has actually applied', () => {
     expect(requiresSalaryClaim('wishlist')).toBe(false);
     expect(requiresSalaryClaim('applied')).toBe(true);
     expect(requiresSalaryClaim('offer')).toBe(true);
-    // Nothing to ask for once the door is closed.
     expect(requiresSalaryClaim('rejected')).toBe(false);
   });
 
-  it('is required when a saved job becomes an application', () => {
+  it('is never a hard server requirement — empty means not stated', () => {
     expect(
       salaryClaimMissingOnApply({
         status: 'applied',
         salaryClaim: '',
         previousStatus: 'wishlist',
       }),
-    ).toBe(true);
-    expect(
-      salaryClaimMissingOnApply({
-        status: 'applied',
-        salaryClaim: '45 000 kr/mån',
-        previousStatus: 'wishlist',
-      }),
     ).toBe(false);
-  });
-
-  it('is required when a row is created as already applied', () => {
-    expect(salaryClaimMissingOnApply({ status: 'applied', salaryClaim: '' })).toBe(true);
-    expect(salaryClaimMissingOnApply({ status: 'wishlist', salaryClaim: '' })).toBe(false);
-  });
-
-  it('is not re-asked when moving between post-application statuses', () => {
-    expect(
-      salaryClaimMissingOnApply({
-        status: 'interview',
-        salaryClaim: '',
-        previousStatus: 'applied',
-      }),
-    ).toBe(false);
-  });
-
-  it('treats whitespace as missing', () => {
-    expect(salaryClaimMissingOnApply({ status: 'applied', salaryClaim: '   ' })).toBe(true);
+    expect(salaryClaimMissingOnApply({ status: 'applied', salaryClaim: '' })).toBe(false);
+    expect(isValidSalaryClaim('45 000 kr/mån')).toBe(true);
+    expect(isValidSalaryClaim('Angav ingen lön')).toBe(true);
+    expect(isValidSalaryClaim('abc')).toBe(false);
   });
 });

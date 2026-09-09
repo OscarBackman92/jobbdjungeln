@@ -9,7 +9,7 @@
  */
 
 import { labelsInText, skillHitsText } from './matching.ts';
-import { canonicalSkillLabel, KNOWN_SKILL_LABELS } from './skills.ts';
+import { canonicalSkillLabel, isLanguageSkill, KNOWN_SKILL_LABELS } from './skills.ts';
 
 export type RequirementLevel = 'must' | 'merit';
 export type MatchBand = 'strong' | 'medium' | 'weak' | 'unknown';
@@ -97,16 +97,14 @@ const SENTENCE_SPLIT = /(?<=[.!?])\s+(?=[A-ZÅÄÖ])/;
 
 const MAX_HEADER_LENGTH = 60;
 const MIN_DESCRIPTION_LENGTH_FOR_CONFIDENCE = 200;
-/** Additive smoothing: a 2/2 ad can never report 100 %. */
-const SCORE_SHRINKAGE = 2;
 const SNIPPET_LENGTH = 120;
 
 function knownLabels(extraTerms: readonly string[] = []): string[] {
-  const labels = [...KNOWN_SKILL_LABELS];
+  const labels = KNOWN_SKILL_LABELS.filter((label) => !isLanguageSkill(label));
   const seen = new Set(labels.map((label) => label.toLowerCase()));
   for (const term of extraTerms) {
     const label = canonicalSkillLabel(term);
-    if (!label) continue;
+    if (!label || isLanguageSkill(label)) continue;
     const key = label.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -179,6 +177,7 @@ export function extractRequirements(
     snippet: string,
     sourceLine: number,
   ): void => {
+    if (isLanguageSkill(term)) return;
     const key = term.toLowerCase();
     const existing = results.get(key);
     // "must" always wins over "merit"; first occurrence wins within a level.
@@ -265,6 +264,9 @@ export function scorePosting(
 
   for (const requirement of requirements) {
     const { term, level, snippet } = requirement;
+    // Defense in depth: languages are filtered at extraction too.
+    if (isLanguageSkill(term)) continue;
+
     if (level === 'must') mustTotal += 1;
     else meritTotal += 1;
 
@@ -292,9 +294,10 @@ export function scorePosting(
 
   let score: number | null = null;
   if (mustTotal > 0) {
-    score = Math.round((100 * mustCovered) / (mustTotal + SCORE_SHRINKAGE));
+    // Raw coverage — the UI shows "X av Y krav"; the percentage must match.
+    score = Math.round((100 * mustCovered) / mustTotal);
   } else if (meritTotal > 0) {
-    score = Math.round((100 * meritCovered) / (meritTotal + SCORE_SHRINKAGE));
+    score = Math.round((100 * meritCovered) / meritTotal);
   }
 
   return {
