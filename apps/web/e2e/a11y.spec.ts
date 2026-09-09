@@ -72,10 +72,10 @@ test.describe('tillgänglighet', () => {
 
   test('mörkt läge går att välja och färgerna följer med', async ({ page }) => {
     await signUp(page);
-    await page.getByRole('radio', { name: 'Mörkt' }).first().check();
+    await page.getByRole('radio', { name: 'Mörkt' }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
-    await page.getByRole('radio', { name: 'Ljust' }).first().check();
+    await page.getByRole('radio', { name: 'Ljust' }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   });
 });

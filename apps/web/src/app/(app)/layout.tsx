@@ -35,9 +35,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           Jobbdjungeln
         </Link>
         <SidebarNav badges={badges} />
-        <div className="mt-auto px-2 pt-4">
-          <ThemeToggle />
-        </div>
       </aside>
 
       <div className="flex min-w-0 flex-col">
@@ -50,9 +47,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Jobbdjungeln
           </Link>
           <div className="ml-auto flex items-center gap-2">
-            <span className="lg:hidden">
-              <ThemeToggle />
-            </span>
+            {/* One toggle for every screen size: two of them in the markup is
+                duplicate UI, and duplicate controls for the same setting. */}
+            <ThemeToggle />
             <UserMenu email={user.email} operatorId={user.operatorId} />
           </div>
         </header>

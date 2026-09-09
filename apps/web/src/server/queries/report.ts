@@ -178,6 +178,31 @@ export async function listPeriods(
   );
 }
 
+/** One activity as a report row. */
+function activityRow(activity: {
+  id: string;
+  type: string;
+  occurredOn: string;
+  title: string;
+  organisation: string;
+}): ReportRow {
+  return {
+    kind: 'activity',
+    id: activity.id,
+    datum: activity.occurredOn,
+    typ: ACTIVITY_TYPE_LABELS[activity.type as ActivityType] ?? activity.type,
+    yrke: '',
+    arbetsgivare: activity.organisation,
+    omfattning: '',
+    ort: '',
+    svarade: '',
+    lank: '',
+    anteckning: activity.title,
+    // An activity has no occupation to be missing.
+    missingOccupation: false,
+  };
+}
+
 /** Build the rows the user pastes into AF's form, or exports as CSV. */
 export async function reportRows(
   userId: string,
@@ -218,7 +243,27 @@ export async function reportRows(
     });
   }
 
-  if (excluded) return rows;
+  // Excluded activities have to come back too, or leaving one out of the report
+  // would be a one-way door. Events carry no exclusion list of their own here:
+  // they are excluded through the application they belong to.
+  if (excluded) {
+    const hidden = await db()
+      .select()
+      .from(schema.activities)
+      .where(
+        and(
+          eq(schema.activities.userId, userId),
+          eq(schema.activities.reportExcluded, true),
+          between(schema.activities.occurredOn, start, end),
+        ),
+      )
+      .orderBy(asc(schema.activities.occurredOn));
+
+    for (const activity of hidden) {
+      rows.push(activityRow(activity));
+    }
+    return rows.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
+  }
 
   const events = await db()
     .select({
@@ -278,20 +323,7 @@ export async function reportRows(
     .orderBy(asc(schema.activities.occurredOn));
 
   for (const activity of activities) {
-    rows.push({
-      kind: 'activity',
-      id: activity.id,
-      datum: activity.occurredOn,
-      typ: ACTIVITY_TYPE_LABELS[activity.type as ActivityType] ?? activity.type,
-      yrke: '',
-      arbetsgivare: activity.organisation,
-      omfattning: '',
-      ort: '',
-      svarade: '',
-      lank: '',
-      anteckning: activity.title,
-      missingOccupation: false,
-    });
+    rows.push(activityRow(activity));
   }
 
   return rows.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
