@@ -23,3 +23,6 @@ Thumbs.db
 !.vscode/extensions.json
 
 .pglite/
+
+# Next build output is per-machine
+next-env.d.ts

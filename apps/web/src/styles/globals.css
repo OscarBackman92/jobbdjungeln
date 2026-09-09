@@ -1,0 +1,247 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ *
+ * Job hunting is anxious work done on bad days, so the palette is calm and the
+ * accents are reserved for the two things that genuinely need attention: a
+ * deadline running out, and an application going unanswered. Everything is
+ * defined for light first, then re-stated for dark, so a colour never has its
+ * only definition inside a media query.
+ */
+@theme {
+  --font-sans:
+    "Inter var", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Neutrals: a warm-leaning grey, so the app does not read as clinical. */
+    --surface: oklch(99% 0.004 95);
+    --surface-raised: oklch(100% 0 0);
+    --surface-sunken: oklch(96.5% 0.005 95);
+    --surface-hover: oklch(97.5% 0.005 95);
+    --border: oklch(90% 0.006 95);
+    --border-strong: oklch(83% 0.008 95);
+    --text: oklch(24% 0.012 90);
+    --text-muted: oklch(50% 0.012 90);
+    --text-subtle: oklch(62% 0.01 90);
+
+    /* Brand: the deep green of the "jungle", used sparingly. */
+    --brand: oklch(48% 0.11 165);
+    --brand-hover: oklch(42% 0.11 165);
+    --brand-soft: oklch(95% 0.03 165);
+    --brand-text: oklch(36% 0.09 165);
+    --on-brand: oklch(99% 0.01 165);
+
+    /* Status. Amber warns, red is only ever a real problem. */
+    --positive: oklch(52% 0.13 150);
+    --positive-soft: oklch(95% 0.04 150);
+    --positive-text: oklch(38% 0.1 150);
+
+    --warning: oklch(70% 0.15 70);
+    --warning-soft: oklch(96% 0.05 80);
+    --warning-text: oklch(45% 0.12 65);
+
+    --danger: oklch(55% 0.19 27);
+    --danger-soft: oklch(96% 0.03 27);
+    --danger-text: oklch(45% 0.17 27);
+
+    --info: oklch(55% 0.13 250);
+    --info-soft: oklch(96% 0.03 250);
+    --info-text: oklch(42% 0.12 250);
+
+    --ring: oklch(55% 0.12 165);
+
+    /*
+     * Chart ramp. One hue, five monotone lightness steps, because the charts
+     * encode order (pipeline stage) rather than identity. Every step clears 3:1
+     * against the chart surface, so no bar is invisible; the accent/muted pair
+     * is for the one emphasis chart, where the story is a single series and the
+     * rest is context.
+     */
+    --chart-1: #029e72;
+    --chart-2: #008f64;
+    --chart-3: #007f56;
+    --chart-4: #007048;
+    --chart-5: #00623a;
+    --chart-accent: #007048;
+    --chart-muted: #88867e;
+    --chart-grid: oklch(90% 0.006 95);
+
+    --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.04), 0 1px 3px oklch(0% 0 0 / 0.04);
+    --shadow-raised: 0 4px 6px -1px oklch(0% 0 0 / 0.06), 0 2px 4px -2px oklch(0% 0 0 / 0.05);
+    --shadow-overlay:
+      0 20px 25px -5px oklch(0% 0 0 / 0.12), 0 8px 10px -6px oklch(0% 0 0 / 0.08);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --surface: oklch(17% 0.008 260);
+    --surface-raised: oklch(21% 0.009 260);
+    --surface-sunken: oklch(14% 0.008 260);
+    --surface-hover: oklch(25% 0.01 260);
+    --border: oklch(29% 0.01 260);
+    --border-strong: oklch(38% 0.012 260);
+    --text: oklch(95% 0.005 260);
+    --text-muted: oklch(72% 0.01 260);
+    --text-subtle: oklch(58% 0.012 260);
+
+    --brand: oklch(72% 0.12 165);
+    --brand-hover: oklch(78% 0.12 165);
+    --brand-soft: oklch(28% 0.05 165);
+    --brand-text: oklch(82% 0.1 165);
+    --on-brand: oklch(16% 0.03 165);
+
+    --positive: oklch(72% 0.14 150);
+    --positive-soft: oklch(27% 0.05 150);
+    --positive-text: oklch(84% 0.12 150);
+
+    --warning: oklch(80% 0.14 75);
+    --warning-soft: oklch(30% 0.06 70);
+    --warning-text: oklch(88% 0.11 80);
+
+    --danger: oklch(68% 0.17 27);
+    --danger-soft: oklch(28% 0.07 27);
+    --danger-text: oklch(85% 0.11 27);
+
+    --info: oklch(72% 0.12 250);
+    --info-soft: oklch(27% 0.06 250);
+    --info-text: oklch(85% 0.09 250);
+
+    --ring: oklch(70% 0.12 165);
+
+    /* The ramp inverts in dark: the far end of the funnel stays the brightest. */
+    --chart-1: #007852;
+    --chart-2: #13936b;
+    --chart-3: #3eaf86;
+    --chart-4: #5fcca1;
+    --chart-5: #7ae7ba;
+    --chart-accent: #5fcca1;
+    --chart-muted: #7c8088;
+    --chart-grid: oklch(29% 0.01 260);
+
+    --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.3), 0 1px 3px oklch(0% 0 0 / 0.25);
+    --shadow-raised: 0 4px 6px -1px oklch(0% 0 0 / 0.4), 0 2px 4px -2px oklch(0% 0 0 / 0.3);
+    --shadow-overlay: 0 20px 25px -5px oklch(0% 0 0 / 0.5), 0 8px 10px -6px oklch(0% 0 0 / 0.4);
+  }
+}
+
+/* Expose the tokens to Tailwind's utility generator. */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
+  --color-hover: var(--surface-hover);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-text: var(--brand-text);
+  --color-on-brand: var(--on-brand);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-positive-text: var(--positive-text);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-text: var(--info-text);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-accent: var(--chart-accent);
+  --color-chart-muted: var(--chart-muted);
+  --color-chart-grid: var(--chart-grid);
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--surface);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* One visible focus style everywhere, and only for keyboard users. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--brand-soft);
+    color: var(--brand-text);
+  }
+
+  /* Respect a stated preference for less motion. */
+  /* biome-ignore-start lint/complexity/noImportantStyles: this must beat every
+     animation utility in the app, including inline ones from a component library */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  /* biome-ignore-end lint/complexity/noImportantStyles: see above */
+}
+
+@layer components {
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    z-index: 100;
+    padding: 0.5rem 1rem;
+    background: var(--surface-raised);
+    color: var(--text);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-overlay);
+  }
+
+  .skip-link:focus {
+    left: 1rem;
+    top: 1rem;
+  }
+}
+
+@utility scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}

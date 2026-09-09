@@ -1,0 +1,137 @@
+'use client';
+
+import {
+  Archive,
+  ArchiveRestore,
+  CalendarClock,
+  Pause,
+  Play,
+  Send,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
+import { SalaryClaimDialog } from '@/components/board/salary-claim-dialog';
+import { Button, Input } from '@/components/ui';
+import { bulkAction } from '@/server/actions/applications';
+
+/**
+ * The bar that appears once rows are selected.
+ *
+ * Fixed above the mobile navigation so it never covers it, and it names the
+ * count so a bulk delete is never a surprise.
+ */
+export function BulkBar({
+  selected,
+  onClear,
+  variant,
+}: {
+  selected: string[];
+  onClear: () => void;
+  variant: 'saved' | 'applied';
+}) {
+  const [pending, startTransition] = useTransition();
+  const [askSalary, setAskSalary] = useState(false);
+  const [applyBy, setApplyBy] = useState('');
+
+  if (selected.length === 0) return null;
+
+  function run(action: string, extra: Record<string, unknown> = {}) {
+    startTransition(async () => {
+      const result = await bulkAction({ ids: selected, action, ...extra });
+      if (result.ok) {
+        toast.success(`${result.data.affected} rader uppdaterade`);
+        setAskSalary(false);
+        onClear();
+      } else if (result.fieldErrors?.salaryClaim) {
+        setAskSalary(true);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <>
+      <section
+        aria-label={`${selected.length} valda rader`}
+        className="fixed inset-x-3 bottom-[4.5rem] z-40 flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-line bg-raised p-2 shadow-overlay lg:inset-x-auto lg:right-6 lg:bottom-6 lg:left-[16.5rem]"
+      >
+        <span className="px-2 text-sm font-medium text-ink tabular-nums">
+          {selected.length} valda
+        </span>
+
+        {variant === 'saved' ? (
+          <>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setAskSalary(true)}
+              disabled={pending}
+            >
+              <Send aria-hidden />
+              Markera som sökt
+            </Button>
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                aria-label="Sök senast"
+                value={applyBy}
+                onChange={(event) => setApplyBy(event.target.value)}
+                className="h-8 w-36"
+              />
+              <Button
+                size="sm"
+                onClick={() => run('set_apply_by', { applyBy })}
+                disabled={pending || !applyBy}
+              >
+                <CalendarClock aria-hidden />
+                Sätt
+              </Button>
+            </div>
+            <Button size="sm" onClick={() => run('pause')} disabled={pending}>
+              <Pause aria-hidden />
+              Lägg på is
+            </Button>
+            <Button size="sm" onClick={() => run('activate')} disabled={pending}>
+              <Play aria-hidden />
+              Aktivera
+            </Button>
+          </>
+        ) : null}
+
+        <Button size="sm" onClick={() => run('archive')} disabled={pending}>
+          <Archive aria-hidden />
+          Arkivera
+        </Button>
+        <Button size="sm" onClick={() => run('unarchive')} disabled={pending}>
+          <ArchiveRestore aria-hidden />
+          Återställ
+        </Button>
+        <Button
+          size="sm"
+          variant="danger"
+          disabled={pending}
+          onClick={() => {
+            if (confirm(`Ta bort ${selected.length} rader permanent?`)) run('delete');
+          }}
+        >
+          <Trash2 aria-hidden />
+          Ta bort
+        </Button>
+
+        <Button size="icon" variant="ghost" onClick={onClear} aria-label="Avmarkera alla">
+          <X aria-hidden />
+        </Button>
+      </section>
+
+      <SalaryClaimDialog
+        open={askSalary}
+        pending={pending}
+        onOpenChange={setAskSalary}
+        onSubmit={(claim) => run('mark_applied', { salaryClaim: claim })}
+      />
+    </>
+  );
+}
