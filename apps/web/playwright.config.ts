@@ -5,8 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * The suite boots its own stack: a mock JobTech server and the app pointed at
  * it, so the tests never depend on a third-party API being up — or on it
- * returning the same ads twice. E-mail verification is switched off here only;
- * the environment schema refuses that flag in production.
+ * returning the same ads twice. AUTH_TEST_MODE relaxes e-mail verification and
+ * the rate limits; the environment schema refuses that flag in production.
  */
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
@@ -67,7 +67,7 @@ export default defineConfig({
           process.env.DATABASE_URL ?? 'postgresql://postgres@127.0.0.1:5433/jobbdjungeln',
         AUTH_SECRET: 'e2e-hemlighet-som-ar-minst-32-tecken-lang',
         APP_URL: BASE_URL,
-        AUTH_SKIP_EMAIL_VERIFICATION: '1',
+        AUTH_TEST_MODE: '1',
         JOBTECH_SEARCH_URL: `http://127.0.0.1:${MOCK_PORT}/search`,
         JOBTECH_AD_URL: `http://127.0.0.1:${MOCK_PORT}/ad`,
         JOBTECH_TAXONOMY_URL: `http://127.0.0.1:${MOCK_PORT}/concepts`,

@@ -63,7 +63,7 @@ function auth() {
       enabled: true,
       minPasswordLength: MIN_PASSWORD_LENGTH,
       // No session until the address is confirmed.
-      requireEmailVerification: !config.AUTH_SKIP_EMAIL_VERIFICATION,
+      requireEmailVerification: !config.AUTH_TEST_MODE,
       resetPasswordTokenExpiresIn: 60 * 60,
       sendResetPassword: async ({ user, url }) => {
         await sendMail(resetPassword(user.email, url));
@@ -112,17 +112,22 @@ function auth() {
       defaultCookieAttributes: { sameSite: 'lax', httpOnly: true },
     },
 
+    // Always on, so the rule cannot be lost by accident; the test suite raises
+    // the ceiling rather than switching it off, and it still runs against a
+    // limiter.
     rateLimit: {
       enabled: true,
       window: 60,
-      max: 30,
-      customRules: {
-        // Credential endpoints are what gets attacked; hold them much tighter.
-        '/sign-in/email': { window: 60, max: 5 },
-        '/sign-up/email': { window: 60 * 60, max: 5 },
-        '/forget-password': { window: 60 * 60, max: 5 },
-        '/reset-password': { window: 60 * 60, max: 5 },
-      },
+      max: config.AUTH_TEST_MODE ? 10_000 : 30,
+      customRules: config.AUTH_TEST_MODE
+        ? {}
+        : {
+            // Credential endpoints are what gets attacked; hold them tighter.
+            '/sign-in/email': { window: 60, max: 5 },
+            '/sign-up/email': { window: 60 * 60, max: 5 },
+            '/forget-password': { window: 60 * 60, max: 5 },
+            '/reset-password': { window: 60 * 60, max: 5 },
+          },
     },
 
     databaseHooks: {

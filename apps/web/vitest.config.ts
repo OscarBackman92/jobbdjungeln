@@ -5,7 +5,12 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // `server-only` throws outside a server bundle; the tests only exercise
+      // the pure parts of those modules.
+      'server-only': fileURLToPath(new URL('./src/test/server-only-stub.ts', import.meta.url)),
+    },
   },
   test: {
     environment: 'jsdom',

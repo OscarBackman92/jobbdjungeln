@@ -22,7 +22,7 @@ const booleanish = z
       : ['1', 'true', 'yes', 'on'].includes(value.toLowerCase()),
   );
 
-const schema = z
+export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
@@ -51,8 +51,13 @@ const schema = z
     JOBTECH_AD_URL: z.string().optional(),
     JOBTECH_TAXONOMY_URL: z.string().optional(),
 
-    /** Test-only escape hatch, refused in production by the check below. */
-    AUTH_SKIP_EMAIL_VERIFICATION: booleanish.default(false),
+    /**
+     * Relaxes what only gets in the way of an automated suite: e-mail
+     * verification and the rate limits. One switch rather than several, so
+     * there is exactly one thing to refuse in production — which the check
+     * below does.
+     */
+    AUTH_TEST_MODE: booleanish.default(false),
   })
   .superRefine((value, ctx) => {
     // `next build` runs with NODE_ENV=production but serves no requests, and a
@@ -60,11 +65,11 @@ const schema = z
     // below guard a running server, so they are skipped while building.
     if (value.NODE_ENV !== 'production' || isBuildPhase()) return;
 
-    if (value.AUTH_SKIP_EMAIL_VERIFICATION) {
+    if (value.AUTH_TEST_MODE) {
       ctx.addIssue({
         code: 'custom',
-        path: ['AUTH_SKIP_EMAIL_VERIFICATION'],
-        message: 'E-postverifiering får aldrig stängas av i produktion.',
+        path: ['AUTH_TEST_MODE'],
+        message: 'Testläget får aldrig vara påslaget i produktion.',
       });
     }
     if (!value.APP_URL.startsWith('https://')) {
@@ -90,10 +95,10 @@ const schema = z
     }
   });
 
-export type Env = z.infer<typeof schema>;
+export type Env = z.infer<typeof envSchema>;
 
 function load(): Env {
-  const parsed = schema.safeParse(process.env);
+  const parsed = envSchema.safeParse(process.env);
   if (parsed.success) return parsed.data;
 
   const details = parsed.error.issues

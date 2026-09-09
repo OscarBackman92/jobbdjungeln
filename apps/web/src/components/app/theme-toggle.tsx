@@ -36,17 +36,22 @@ export function ThemeToggle() {
           <label
             key={value}
             className={cn(
-              'cursor-pointer rounded-full p-1.5 transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)]',
+              'relative cursor-pointer rounded-full p-1.5 transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)]',
               active ? 'bg-raised text-ink shadow-card' : 'text-subtle hover:text-ink',
             )}
           >
+            {/*
+              The input covers the whole swatch rather than hiding in a corner:
+              it stays the thing that is clicked, so the hit area matches what
+              the eye sees and the icon never gets in the way.
+            */}
             <input
               type="radio"
               name={name}
               value={value}
               checked={active}
               onChange={() => setTheme(value)}
-              className="sr-only"
+              className="absolute inset-0 cursor-pointer opacity-0"
             />
             <Icon className="size-3.5" aria-hidden />
             <span className="sr-only">{label}</span>

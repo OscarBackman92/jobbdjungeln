@@ -146,7 +146,9 @@ Allt användarsynligt är ett kalenderdatum i Europe/Stockholm och färdas som
   automatisk gallring av konton som varit vilande i två år — efter ett
   varningsmejl 30 dagar i förväg.
 - **Miljön valideras vid start** och vägrar starta produktion utan https, utan
-  hemlighet för de schemalagda jobben, eller med e-postverifiering avstängd.
+  hemlighet för de schemalagda jobben, eller med testläget påslaget. Testläget
+  (`AUTH_TEST_MODE`) är en enda brytare — e-postverifiering och rate limit — så
+  det finns exakt en sak att vägra i produktion.
 
 ## Schemalagda jobb
 
