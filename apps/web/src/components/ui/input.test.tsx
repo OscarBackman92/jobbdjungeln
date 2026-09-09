@@ -57,6 +57,21 @@ describe('Field', () => {
     expect(screen.queryByText('Minst 10 tecken.')).toBeNull();
   });
 
+  it('names a non-native control too, via aria-labelledby', () => {
+    // A Radix trigger renders a <button>, which `<label for>` does not name.
+    render(
+      <Field label="Län">
+        {(props) => (
+          <button type="button" {...props}>
+            Hela landet
+          </button>
+        )}
+      </Field>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Län' })).toBeInTheDocument();
+  });
+
   it('gives every field its own id, so two on one page do not collide', () => {
     render(
       <>

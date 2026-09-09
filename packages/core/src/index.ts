@@ -6,6 +6,7 @@ export * from './ics.ts';
 export * from './lifecycle.ts';
 export * from './matching.ts';
 export * from './periods.ts';
+export * from './plural.ts';
 export * from './requirements.ts';
 export * from './skills.ts';
 export * from './statuses.ts';

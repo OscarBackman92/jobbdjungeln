@@ -74,7 +74,8 @@ export function JobCard({ job }: { job: JobHit }) {
   }
 
   return (
-    <Card className="p-4">
+    // An ad is a self-contained piece of content, which is what <article> means.
+    <Card as="article" className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-[15px] font-semibold tracking-tight text-ink">{job.title}</h3>

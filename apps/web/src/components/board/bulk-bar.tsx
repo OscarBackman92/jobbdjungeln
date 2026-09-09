@@ -1,5 +1,6 @@
 'use client';
 
+import { plural } from '@jobbdjungeln/core';
 import {
   Archive,
   ArchiveRestore,
@@ -41,7 +42,7 @@ export function BulkBar({
     startTransition(async () => {
       const result = await bulkAction({ ids: selected, action, ...extra });
       if (result.ok) {
-        toast.success(`${result.data.affected} rader uppdaterade`);
+        toast.success(plural(result.data.affected, 'rad uppdaterad', 'rader uppdaterade'));
         setAskSalary(false);
         onClear();
       } else if (result.fieldErrors?.salaryClaim) {
@@ -55,11 +56,11 @@ export function BulkBar({
   return (
     <>
       <section
-        aria-label={`${selected.length} valda rader`}
+        aria-label={`${plural(selected.length, 'vald rad', 'valda rader')}`}
         className="fixed inset-x-3 bottom-[4.5rem] z-40 flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-line bg-raised p-2 shadow-overlay lg:inset-x-auto lg:right-6 lg:bottom-6 lg:left-[16.5rem]"
       >
         <span className="px-2 text-sm font-medium text-ink tabular-nums">
-          {selected.length} valda
+          {plural(selected.length, 'vald', 'valda')}
         </span>
 
         {variant === 'saved' ? (
@@ -114,7 +115,8 @@ export function BulkBar({
           variant="danger"
           disabled={pending}
           onClick={() => {
-            if (confirm(`Ta bort ${selected.length} rader permanent?`)) run('delete');
+            if (confirm(`Ta bort ${plural(selected.length, 'rad', 'rader')} permanent?`))
+              run('delete');
           }}
         >
           <Trash2 aria-hidden />

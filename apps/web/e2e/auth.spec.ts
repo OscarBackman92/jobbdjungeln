@@ -28,7 +28,8 @@ test.describe('konto och inloggning', () => {
     await page.getByLabel('Lösenord', { exact: true }).fill('helt fel lösenord');
     await page.getByRole('button', { name: 'Logga in' }).click();
 
-    const alert = page.getByRole('alert');
+    // Scoped to the form: Next's own route announcer is also role="alert".
+    const alert = page.getByRole('main').getByRole('alert');
     await expect(alert).toContainText('E-post eller lösenord stämmer inte');
 
     // The same message for an address that does not exist at all.

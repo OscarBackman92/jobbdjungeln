@@ -20,6 +20,7 @@ import {
   parseIsoDate,
   today as todayIso,
 } from './dates.ts';
+import { plural } from './plural.ts';
 
 export const PERIOD_STATUSES = ['pagaende', 'klar', 'rapporterad', 'forsenad'] as const;
 export type PeriodStatus = (typeof PERIOD_STATUSES)[number];
@@ -100,7 +101,11 @@ export function periodBanner(summary: {
   const heading = monthHeading(summary.month);
   const { closes } = reportingWindow(summary.year, summary.month);
   const deadline = `${WINDOW_CLOSES_ON_DAY} ${monthName(parseIsoDate(closes).month)}`;
-  const counts = `${summary.jobCount} sökta jobb och ${summary.activityCount} aktiviteter`;
+  const counts = `${plural(summary.jobCount, 'sökt jobb', 'sökta jobb')} och ${plural(
+    summary.activityCount,
+    'aktivitet',
+    'aktiviteter',
+  )}`;
   return summary.status === 'klar'
     ? `${heading} är klar att rapportera — ${counts}. Lämna in senast ${deadline}.`
     : `${heading} är försenad att rapportera — ${counts}. Fönstret stängde ${deadline}.`;

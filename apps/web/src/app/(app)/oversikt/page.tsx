@@ -4,6 +4,7 @@ import {
   formatShortDate,
   OUTCOME_LABELS,
   type Outcome,
+  plural,
   SAVED_LANE_LABELS,
 } from '@jobbdjungeln/core';
 import {
@@ -240,8 +241,8 @@ export default async function OverviewPage() {
           {summary.staleCount > 0 ? (
             <p className="flex items-center gap-2 rounded-[var(--radius-card)] border border-line bg-sunken px-4 py-3 text-sm text-muted">
               <MessageSquare className="size-4 shrink-0 text-subtle" aria-hidden />
-              {summary.staleCount} ansökningar har varit tysta i över 45 dagar. Det är rimligt
-              att sätta dem till <em>Inget svar</em> och rensa vyn.
+              {plural(summary.staleCount, 'ansökan har', 'ansökningar har')} varit tyst i över
+              45 dagar. Det är rimligt att sätta dem till <em>Inget svar</em> och rensa vyn.
             </p>
           ) : null}
         </div>

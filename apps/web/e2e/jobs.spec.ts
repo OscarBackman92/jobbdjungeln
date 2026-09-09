@@ -13,7 +13,8 @@ test.describe('annonssök', () => {
 
     const card = page.getByRole('article').filter({ hasText: 'Ekonomiassistent till Acme AB' });
     await expect(card).toBeVisible();
-    await expect(card.getByText('Stockholm')).toBeVisible();
+    // Exact, so this matches the location chip rather than the ad text.
+    await expect(card.getByText('Stockholm', { exact: true })).toBeVisible();
 
     await card.getByRole('button', { name: 'Spara' }).click();
     await expect(card.getByRole('button', { name: 'Sparad' })).toBeVisible();
@@ -46,10 +47,14 @@ test.describe('annonssök', () => {
     await signUp(page);
     await page.goto('/annonser');
     await page.getByRole('button', { name: 'Filter' }).click();
-    await expect(page.getByText('Län')).toBeVisible();
-    await expect(page.getByText('Yrkesområde')).toBeVisible();
+
+    // Every filter is a named control, not just a box with text beside it.
+    await expect(page.getByRole('combobox', { name: 'Län' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Yrkesområde' })).toBeVisible();
+
     // The narrow lists stay disabled until the broad one is chosen.
-    await expect(page.getByText('Välj län först')).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Kommun' })).toBeDisabled();
+    await expect(page.getByRole('combobox', { name: 'Yrkesgrupp' })).toBeDisabled();
   });
 
   test('en sökning utan träffar säger det rakt ut', async ({ page }) => {

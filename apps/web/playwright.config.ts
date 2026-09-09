@@ -68,6 +68,7 @@ export default defineConfig({
         AUTH_SECRET: 'e2e-hemlighet-som-ar-minst-32-tecken-lang',
         APP_URL: BASE_URL,
         AUTH_TEST_MODE: '1',
+        NEXT_DEV_INDICATORS: 'off',
         JOBTECH_SEARCH_URL: `http://127.0.0.1:${MOCK_PORT}/search`,
         JOBTECH_AD_URL: `http://127.0.0.1:${MOCK_PORT}/ad`,
         JOBTECH_TAXONOMY_URL: `http://127.0.0.1:${MOCK_PORT}/concepts`,

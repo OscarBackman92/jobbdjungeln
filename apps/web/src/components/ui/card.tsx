@@ -1,9 +1,19 @@
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils';
 
-export function Card({ className, ...props }: ComponentProps<'div'>) {
+/**
+ * Elements a card may render as, when a plain box is not the honest markup — a
+ * job ad is an <article>, not a div.
+ */
+type CardElement = 'div' | 'article' | 'section';
+
+export function Card({
+  className,
+  as: Component = 'div',
+  ...props
+}: Omit<ComponentProps<'div'>, 'ref'> & { as?: CardElement }) {
   return (
-    <div
+    <Component
       className={cn(
         'rounded-[var(--radius-card)] border border-line bg-raised shadow-card',
         className,

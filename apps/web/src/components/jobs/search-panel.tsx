@@ -1,5 +1,6 @@
 'use client';
 
+import { plural } from '@jobbdjungeln/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
@@ -10,6 +11,7 @@ import {
   Checkbox,
   EmptyState,
   ErrorNote,
+  Field,
   Input,
   Label,
   Select,
@@ -192,97 +194,101 @@ export function SearchPanel({
 
         {showFilters ? (
           <div className="grid gap-3 rounded-[var(--radius-card)] border border-line bg-raised p-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Län</Label>
-              <Select
-                value={draft.region || ANY}
-                onValueChange={(value) =>
-                  setDraft({ ...draft, region: value === ANY ? '' : value, municipality: '' })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Hela landet" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Hela landet</SelectItem>
-                  {filters?.regions.map((region) => (
-                    <SelectItem key={region.id} value={region.id}>
-                      {region.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Field label="Län">
+              {(props) => (
+                <Select
+                  value={draft.region || ANY}
+                  onValueChange={(value) =>
+                    setDraft({ ...draft, region: value === ANY ? '' : value, municipality: '' })
+                  }
+                >
+                  <SelectTrigger {...props}>
+                    <SelectValue placeholder="Hela landet" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>Hela landet</SelectItem>
+                    {filters?.regions.map((region) => (
+                      <SelectItem key={region.id} value={region.id}>
+                        {region.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Kommun</Label>
-              <Select
-                value={draft.municipality || ANY}
-                onValueChange={(value) =>
-                  setDraft({ ...draft, municipality: value === ANY ? '' : value })
-                }
-                disabled={!draft.region}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={draft.region ? 'Hela länet' : 'Välj län först'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Hela länet</SelectItem>
-                  {filters?.municipalities.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Field label="Kommun">
+              {(props) => (
+                <Select
+                  value={draft.municipality || ANY}
+                  onValueChange={(value) =>
+                    setDraft({ ...draft, municipality: value === ANY ? '' : value })
+                  }
+                  disabled={!draft.region}
+                >
+                  <SelectTrigger {...props}>
+                    <SelectValue placeholder={draft.region ? 'Hela länet' : 'Välj län först'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>Hela länet</SelectItem>
+                    {filters?.municipalities.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Yrkesområde</Label>
-              <Select
-                value={draft.field || ANY}
-                onValueChange={(value) =>
-                  setDraft({ ...draft, field: value === ANY ? '' : value, group: '' })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Alla områden" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Alla områden</SelectItem>
-                  {filters?.fields.map((field) => (
-                    <SelectItem key={field.id} value={field.id}>
-                      {field.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Field label="Yrkesområde">
+              {(props) => (
+                <Select
+                  value={draft.field || ANY}
+                  onValueChange={(value) =>
+                    setDraft({ ...draft, field: value === ANY ? '' : value, group: '' })
+                  }
+                >
+                  <SelectTrigger {...props}>
+                    <SelectValue placeholder="Alla områden" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>Alla områden</SelectItem>
+                    {filters?.fields.map((field) => (
+                      <SelectItem key={field.id} value={field.id}>
+                        {field.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Yrkesgrupp</Label>
-              <Select
-                value={draft.group || ANY}
-                onValueChange={(value) =>
-                  setDraft({ ...draft, group: value === ANY ? '' : value })
-                }
-                disabled={!draft.field}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={draft.field ? 'Alla grupper' : 'Välj område först'}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Alla grupper</SelectItem>
-                  {filters?.groups.map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
-                      {group.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Field label="Yrkesgrupp">
+              {(props) => (
+                <Select
+                  value={draft.group || ANY}
+                  onValueChange={(value) =>
+                    setDraft({ ...draft, group: value === ANY ? '' : value })
+                  }
+                  disabled={!draft.field}
+                >
+                  <SelectTrigger {...props}>
+                    <SelectValue
+                      placeholder={draft.field ? 'Alla grupper' : 'Välj område först'}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>Alla grupper</SelectItem>
+                    {filters?.groups.map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
 
             <span className="flex items-center gap-2 sm:col-span-2">
               <Checkbox
@@ -340,7 +346,7 @@ export function SearchPanel({
       ) : (
         <>
           <p className="text-[13px] text-subtle" aria-live="polite">
-            {total} träffar
+            {plural(total, 'träff', 'träffar')}
             {!hasResume ? ' · lägg in ditt CV under Profil för att se hur väl du matchar' : ''}
           </p>
           <ul className="flex flex-col gap-3">

@@ -36,11 +36,19 @@ export interface FieldProps {
   error?: string | undefined;
   required?: boolean;
   className?: string;
-  children: (props: {
-    id: string;
-    'aria-describedby': string | undefined;
-    'aria-invalid': boolean;
-  }) => ReactNode;
+  children: (props: FieldControlProps) => ReactNode;
+}
+
+export interface FieldControlProps {
+  id: string;
+  /**
+   * Points at the label's own id. A native input is already named by its
+   * `<label for>`, but a Radix trigger renders a <button>, which `for` does not
+   * associate with — without this it would be an unnamed control.
+   */
+  'aria-labelledby': string;
+  'aria-describedby': string | undefined;
+  'aria-invalid': boolean;
 }
 
 /**
@@ -52,6 +60,7 @@ export interface FieldProps {
  */
 export function Field({ label, hint, error, required, className, children }: FieldProps) {
   const id = useId();
+  const labelId = `${id}-label`;
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
@@ -65,14 +74,21 @@ export function Field({ label, hint, error, required, className, children }: Fie
         is carried by the input's own `required` attribute instead.
       */}
       <span className="flex items-center gap-0.5">
-        <Label htmlFor={id}>{label}</Label>
+        <Label id={labelId} htmlFor={id}>
+          {label}
+        </Label>
         {required ? (
           <span aria-hidden="true" className="text-danger">
             *
           </span>
         ) : null}
       </span>
-      {children({ id, 'aria-describedby': describedBy, 'aria-invalid': Boolean(error) })}
+      {children({
+        id,
+        'aria-labelledby': labelId,
+        'aria-describedby': describedBy,
+        'aria-invalid': Boolean(error),
+      })}
       {error ? (
         <p id={errorId} className="text-[13px] text-danger-text">
           {error}

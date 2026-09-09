@@ -7,6 +7,7 @@ import {
   formatShortDate,
   PERIOD_STATUS_LABELS,
   type PeriodStatus,
+  plural,
   type ReportRow,
   today as todayIso,
 } from '@jobbdjungeln/core';
@@ -93,7 +94,7 @@ export function ReportView({
   async function copyRows() {
     try {
       await navigator.clipboard.writeText(clipboardText(period.rows));
-      toast.success(`${period.rows.length} rader kopierade`);
+      toast.success(plural(period.rows.length, 'rad kopierad', 'rader kopierade'));
     } catch {
       toast.error('Webbläsaren tillät inte kopiering. Ladda ner CSV i stället.');
     }
@@ -154,7 +155,7 @@ export function ReportView({
           value={period.key}
           onValueChange={(value) => router.push(`/rapport?manad=${value}`)}
         >
-          <SelectTrigger className="w-52">
+          <SelectTrigger className="w-52" aria-label="Välj månad">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -210,9 +211,9 @@ export function ReportView({
         <p className="flex items-start gap-2 rounded-[var(--radius-card)] border border-line bg-sunken px-4 py-3 text-sm text-muted">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
           <span>
-            {period.missingOccupationCount} rader saknar yrkesroll. AF:s formulär vill ha en,
-            och den fylls i automatiskt för jobb du sparat från Platsbanken. Fyll i den för hand
-            på övriga, under Ansökningar.
+            {plural(period.missingOccupationCount, 'rad saknar', 'rader saknar')} yrkesroll.
+            AF:s formulär vill ha en, och den fylls i automatiskt för jobb du sparat från
+            Platsbanken. Fyll i den för hand på övriga, under Ansökningar.
           </span>
         </p>
       ) : null}
@@ -220,7 +221,8 @@ export function ReportView({
       <Card>
         <CardHeader>
           <CardTitle>
-            {period.rows.length} rader att rapportera för {period.label.toLowerCase()}
+            {plural(period.rows.length, 'rad', 'rader')} att rapportera för{' '}
+            {period.label.toLowerCase()}
           </CardTitle>
         </CardHeader>
         <CardContent>

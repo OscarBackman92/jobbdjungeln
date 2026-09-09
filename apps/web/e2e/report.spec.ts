@@ -12,7 +12,7 @@ test.describe('månadsrapporten', () => {
     });
 
     await page.goto('/rapport');
-    await expect(page.getByRole('heading', { name: 'Rapport' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Rapport' })).toBeVisible();
     await expect(page.getByText(/rader att rapportera/)).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Acme AB' })).toBeVisible();
   });

@@ -19,6 +19,10 @@ const config: NextConfig = {
   // different local hostname than the one the server thinks it has, which
   // silently breaks the client bundle for anything hitting 127.0.0.1.
   allowedDevOrigins: ['localhost', '127.0.0.1', '[::1]'],
+  // The dev overlay's portal sits on top of the page and swallows clicks near
+  // the corners, which an automated run cannot work around. Off for the e2e
+  // suite, on for everyone else.
+  devIndicators: process.env.NEXT_DEV_INDICATORS === 'off' ? false : undefined,
   poweredByHeader: false,
   experimental: {
     // Server Actions carry every mutation, so keep the body small enough that a
