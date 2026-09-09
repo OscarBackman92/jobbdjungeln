@@ -29,7 +29,24 @@ function auth() {
 
   return betterAuth({
     appName: 'Jobbdjungeln',
-    baseURL: config.APP_URL,
+    // On Vercel the exact public host is not knowable at boot: which alias or
+    // preview URL a request arrives on depends on the deployment, and a value
+    // guessed at startup (from a system env var, or copied by hand into a
+    // dashboard) can be wrong in a way that fails silently — the app still
+    // boots, but baseURL is the one thing better-auth's CSRF origin-check
+    // gates, so every sign-in and sign-up then fails with "Invalid origin".
+    // Resolving it from the incoming request's own Host header instead is
+    // correct by construction: that host is definitionally what routed the
+    // request here. allowedHosts is the allowlist that keeps this from
+    // trusting an attacker-chosen Host — better-auth documents this exact
+    // `*.vercel.app` pattern for preview deployments.
+    baseURL: process.env.VERCEL
+      ? {
+          allowedHosts: ['*.vercel.app', new URL(config.APP_URL).host],
+          protocol: 'https' as const,
+          fallback: config.APP_URL,
+        }
+      : config.APP_URL,
     secret: config.AUTH_SECRET,
 
     // `usePlural` maps better-auth's singular model names onto the plural table
