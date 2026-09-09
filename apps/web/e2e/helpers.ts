@@ -26,6 +26,16 @@ export async function signUp(page: Page, email = uniqueEmail()): Promise<string>
   return email;
 }
 
+/** Sign out through the account menu, and wait until it has taken effect. */
+export async function signOut(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Kontomeny' }).click();
+  await page.getByRole('menuitem', { name: /Logga ut/ }).click();
+  // Navigating before the session is actually gone would be redirected straight
+  // back into the app by the proxy.
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('link', { name: 'Logga in' })).toBeVisible();
+}
+
 export async function signIn(page: Page, email: string): Promise<void> {
   await page.goto('/logga-in');
   await page.getByLabel('E-post').fill(email);

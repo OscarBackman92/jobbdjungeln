@@ -1,14 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { PASSWORD, signIn, signUp, uniqueEmail } from './helpers';
+import { PASSWORD, signIn, signOut, signUp, uniqueEmail } from './helpers';
 
 test.describe('konto och inloggning', () => {
   test('en besökare kan skapa konto, logga ut och logga in igen', async ({ page }) => {
     const email = await signUp(page);
-
-    await page.getByRole('button', { name: 'Kontomeny' }).click();
-    await page.getByRole('menuitem', { name: /Logga ut/ }).click();
-    await expect(page).toHaveURL('/');
-
+    await signOut(page);
     await signIn(page, email);
     await expect(page.getByRole('heading', { name: 'Översikt' })).toBeVisible();
   });
@@ -20,8 +16,7 @@ test.describe('konto och inloggning', () => {
 
   test('fel lösenord avslöjar inte om adressen finns', async ({ page }) => {
     const email = await signUp(page);
-    await page.getByRole('button', { name: 'Kontomeny' }).click();
-    await page.getByRole('menuitem', { name: /Logga ut/ }).click();
+    await signOut(page);
 
     await page.goto('/logga-in');
     await page.getByLabel('E-post').fill(email);

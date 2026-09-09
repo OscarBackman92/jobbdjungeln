@@ -13,7 +13,8 @@ test.describe('månadsrapporten', () => {
 
     await page.goto('/rapport');
     await expect(page.getByRole('heading', { level: 1, name: 'Rapport' })).toBeVisible();
-    await expect(page.getByText(/rader att rapportera/)).toBeVisible();
+    // Singular with one row: "1 rad att rapportera".
+    await expect(page.getByText(/rade?r? att rapportera/)).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Acme AB' })).toBeVisible();
   });
 

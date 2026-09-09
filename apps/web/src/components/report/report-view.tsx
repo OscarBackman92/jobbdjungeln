@@ -233,7 +233,7 @@ export function ReportView({
             />
           ) : (
             <div className="-mx-5 overflow-x-auto px-5">
-              <table className="w-full min-w-[46rem] text-left text-sm">
+              <table className="w-full min-w-[54rem] text-left text-sm">
                 <thead>
                   <tr className="border-b border-line text-[13px] text-subtle">
                     <th scope="col" className="pb-2 font-medium">
@@ -252,6 +252,9 @@ export function ReportView({
                       Ort
                     </th>
                     <th scope="col" className="pb-2 font-medium">
+                      Vad
+                    </th>
+                    <th scope="col" className="pb-2 font-medium">
                       Annons
                     </th>
                     <th scope="col" className="pb-2 font-medium">
@@ -265,10 +268,23 @@ export function ReportView({
                       <td className="py-2 whitespace-nowrap text-muted">{row.datum}</td>
                       <td className="py-2 text-muted">{row.typ}</td>
                       <td className="py-2">
-                        {row.yrke || <span className="text-warning-text">saknas</span>}
+                        {/*
+                          Only a job needs an occupation; a course or a jobs fair
+                          has none, and flagging that as missing would send the
+                          user looking for something to fill in.
+                        */}
+                        {row.yrke ||
+                          (row.missingOccupation ? (
+                            <span className="text-warning-text">saknas</span>
+                          ) : (
+                            <span className="text-subtle">—</span>
+                          ))}
                       </td>
                       <td className="py-2">{row.arbetsgivare}</td>
                       <td className="py-2 text-muted">{row.ort}</td>
+                      {/* The row is unreadable without it: this is the role, or
+                          what the activity actually was. */}
+                      <td className="py-2">{row.anteckning}</td>
                       <td className="py-2 text-muted">{row.svarade}</td>
                       <td className="py-2 text-right">
                         <Button

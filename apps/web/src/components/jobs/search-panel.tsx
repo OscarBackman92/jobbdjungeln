@@ -183,6 +183,9 @@ export function SearchPanel({
             variant="secondary"
             onClick={() => setShowFilters((value) => !value)}
             aria-expanded={showFilters}
+            // The label is hidden on a narrow screen, which would otherwise
+            // leave an icon-only button with no accessible name at all.
+            aria-label="Filter"
           >
             <SlidersHorizontal aria-hidden />
             <span className="hidden sm:inline">Filter</span>
