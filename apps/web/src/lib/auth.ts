@@ -32,20 +32,21 @@ function auth() {
     baseURL: config.APP_URL,
     secret: config.AUTH_SECRET,
 
-    database: drizzleAdapter(db(), {
-      provider: 'pg',
-      schema: {
-        user: schema.users,
-        session: schema.sessions,
-        account: schema.accounts,
-        verification: schema.verifications,
-      },
-      usePlural: true,
-    }),
+    // `usePlural` maps better-auth's singular model names onto the plural table
+    // exports in our schema (user -> users), so the auth tables live in the same
+    // migration history as everything else.
+    database: drizzleAdapter(db(), { provider: 'pg', schema, usePlural: true }),
 
     user: {
       additionalFields: {
-        operatorId: { type: 'string', required: true, input: false },
+        // Generated server-side on every sign-up path, including social, and
+        // never accepted from the client.
+        operatorId: {
+          type: 'string',
+          required: false,
+          input: false,
+          defaultValue: () => operatorId(),
+        },
         lastSeenAt: { type: 'date', required: false, input: false },
         weeklySummaryOptIn: { type: 'boolean', required: false, input: false },
         reminderOptIn: { type: 'boolean', required: false, input: false },
@@ -127,9 +128,7 @@ function auth() {
     databaseHooks: {
       user: {
         create: {
-          before: async (user) => ({
-            data: { ...user, operatorId: operatorId(), lastSeenAt: new Date() },
-          }),
+          before: async (user) => ({ data: { ...user, lastSeenAt: new Date() } }),
         },
       },
       session: {

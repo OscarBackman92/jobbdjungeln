@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR per ecosystem rather than a dozen: these move together anyway.
+      react:
+        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom', 'next']
+      radix:
+        patterns: ['@radix-ui/*']
+      verktyg:
+        patterns: ['@biomejs/*', 'typescript', 'turbo', 'vitest', '@playwright/test']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

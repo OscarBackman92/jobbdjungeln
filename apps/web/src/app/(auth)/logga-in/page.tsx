@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { AuthCard } from '@/components/auth/auth-card';
 import { SignInForm } from '@/components/auth/sign-in-form';
+import { Skeleton } from '@/components/ui';
 import { googleEnabled } from '@/lib/env';
 import { currentUser } from '@/lib/session';
 
@@ -24,7 +26,9 @@ export default async function SignInPage() {
         </>
       }
     >
-      <SignInForm googleEnabled={googleEnabled()} />
+      <Suspense fallback={<Skeleton className="h-56 w-full" />}>
+        <SignInForm googleEnabled={googleEnabled()} />
+      </Suspense>
     </AuthCard>
   );
 }

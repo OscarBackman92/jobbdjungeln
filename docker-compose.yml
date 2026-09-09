@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: jobbdjungeln-db
+    environment:
+      POSTGRES_USER: jobbdjungeln
+      POSTGRES_PASSWORD: jobbdjungeln
+      POSTGRES_DB: jobbdjungeln
+    ports:
+      - '5432:5432'
+    volumes:
+      - jobbdjungeln-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jobbdjungeln -d jobbdjungeln']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  jobbdjungeln-db:

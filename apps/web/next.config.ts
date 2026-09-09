@@ -1,7 +1,12 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Ships a self-contained server bundle, so the runtime image carries only the
+  // dependencies actually reachable from the app.
+  output: 'standalone',
+  outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   // Workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: [
     '@jobbdjungeln/core',
@@ -10,6 +15,10 @@ const config: NextConfig = {
     '@jobbdjungeln/resume',
   ],
   typedRoutes: true,
+  // Development only: Next blocks its own dev resources when the browser uses a
+  // different local hostname than the one the server thinks it has, which
+  // silently breaks the client bundle for anything hitting 127.0.0.1.
+  allowedDevOrigins: ['localhost', '127.0.0.1', '[::1]'],
   poweredByHeader: false,
   experimental: {
     // Server Actions carry every mutation, so keep the body small enough that a

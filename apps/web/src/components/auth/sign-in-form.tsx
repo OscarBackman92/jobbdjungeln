@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { GoogleButton } from '@/components/auth/google-button';
 import { PasswordInput } from '@/components/auth/password-input';
@@ -17,6 +17,7 @@ import { signIn } from '@/lib/auth-client';
  */
 export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
+  const params = useSearchParams();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [unverified, setUnverified] = useState(false);
@@ -46,7 +47,10 @@ export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
       return;
     }
 
-    router.push('/oversikt');
+    // Only an internal path, so the parameter cannot be used to bounce someone
+    // off to another site after they sign in.
+    const next = params.get('nasta') ?? '';
+    router.push(next.startsWith('/') && !next.startsWith('//') ? next : '/oversikt');
     router.refresh();
   }
 

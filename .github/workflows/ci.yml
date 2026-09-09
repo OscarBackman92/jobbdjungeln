@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # A throwaway value: CI never sends real mail or signs a real session.
+  AUTH_SECRET: ci-hemlighet-som-ar-minst-32-tecken-lang
+  APP_URL: http://127.0.0.1:3100
+
+jobs:
+  kvalitet:
+    name: Lint, typer och enhetstester
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint och format
+        run: pnpm lint
+
+      - name: Typkontroll
+        run: pnpm typecheck
+
+      - name: Enhetstester
+        run: pnpm test
+
+  bygge:
+    name: Produktionsbygge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Bygg
+        run: pnpm build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/jobbdjungeln
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Same engine as production, so constraints behave identically.
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jobbdjungeln
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/jobbdjungeln
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Migrera databasen
+        run: pnpm db:migrate
+
+      - name: Installera webbläsare
+        run: pnpm --filter @jobbdjungeln/web exec playwright install --with-deps chromium
+
+      - name: Kör end-to-end-testerna
+        run: pnpm test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

@@ -58,10 +58,20 @@ export function Field({ label, hint, error, required, className, children }: Fie
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <Label htmlFor={id}>
-        {label}
-        {required ? <span className="ml-0.5 text-danger">*</span> : null}
-      </Label>
+      {/*
+        The required marker sits outside the <label>, so it stays out of the
+        accessible name: Chromium folds both label text and CSS generated content
+        into it, and a screen reader would announce "Lösenord star". The meaning
+        is carried by the input's own `required` attribute instead.
+      */}
+      <span className="flex items-center gap-0.5">
+        <Label htmlFor={id}>{label}</Label>
+        {required ? (
+          <span aria-hidden="true" className="text-danger">
+            *
+          </span>
+        ) : null}
+      </span>
       {children({ id, 'aria-describedby': describedBy, 'aria-invalid': Boolean(error) })}
       {error ? (
         <p id={errorId} className="text-[13px] text-danger-text">
