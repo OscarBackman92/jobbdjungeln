@@ -3,6 +3,31 @@
   "ui": "stream",
   "globalDependencies": [".env", "tsconfig.base.json"],
   "globalEnv": ["NODE_ENV", "CI"],
+  // Runtime configuration, not build inputs: nothing here is inlined into the
+  // bundle, it is all read per request. Turborepo filters out any variable it
+  // has not been told about, so without this the app's own build cannot see
+  // DATABASE_URL and fails while prerendering. passThrough rather than env so
+  // that rotating a secret does not invalidate every cached build.
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "AUTH_SECRET",
+    "APP_URL",
+    "AUTH_TEST_MODE",
+    "CRON_SECRET",
+    "CONTACT_EMAIL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "BREVO_API_KEY",
+    "SMTP_URL",
+    "EMAIL_FROM",
+    "JOBTECH_SEARCH_URL",
+    "JOBTECH_AD_URL",
+    "JOBTECH_TAXONOMY_URL",
+    "VERCEL",
+    "VERCEL_URL",
+    "VERCEL_ENV",
+    "NEXT_DEV_INDICATORS"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

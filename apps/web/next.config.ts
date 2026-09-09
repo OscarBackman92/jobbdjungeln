@@ -4,8 +4,10 @@ import type { NextConfig } from 'next';
 const config: NextConfig = {
   reactStrictMode: true,
   // Ships a self-contained server bundle, so the runtime image carries only the
-  // dependencies actually reachable from the app.
-  output: 'standalone',
+  // dependencies actually reachable from the app. This is for the Docker image
+  // only — Vercel produces its own output and a standalone build there just
+  // duplicates the server into a directory nothing serves.
+  output: process.env.VERCEL ? undefined : 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   // Workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: [
