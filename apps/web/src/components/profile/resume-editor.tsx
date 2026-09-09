@@ -16,6 +16,7 @@ import {
   Input,
   Textarea,
 } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import { parseResumeAction, saveResumeAction } from '@/server/actions/resume';
 
 interface Experience {
@@ -58,6 +59,7 @@ function newId(): string {
  */
 export function ResumeEditor({ initial }: { initial: ResumeState }) {
   const [resume, setResume] = useState<ResumeState>(initial);
+  const [saved, setSaved] = useState<ResumeState>(initial);
   const [skillDraft, setSkillDraft] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [parsing, setParsing] = useState(false);
@@ -98,8 +100,12 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
   function save() {
     startSaving(async () => {
       const result = await saveResumeAction({ ...resume, jobProfiles: [] });
-      if (result.ok) toast.success('CV sparat');
-      else setError(result.error);
+      if (result.ok) {
+        setSaved(resume);
+        toast.success('CV sparat');
+      } else {
+        setError(result.error);
+      }
     });
   }
 
@@ -112,6 +118,13 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
     }));
     setSkillDraft('');
   }
+
+  /*
+   * Whether anything is waiting to be saved. A cheap structural comparison is
+   * enough here: the worst a false positive can do is float the save bar a
+   * moment early, and the shape is small enough that the cost is invisible.
+   */
+  const dirty = JSON.stringify(resume) !== JSON.stringify(saved);
 
   return (
     <div className="flex flex-col gap-4">
@@ -491,14 +504,24 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         </CardContent>
       </Card>
 
-      <div className="sticky bottom-20 z-10 flex justify-end lg:bottom-4">
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={save}
-          loading={saving}
-          className="shadow-overlay"
-        >
+      {/*
+        The save bar only follows the scroll once there is something to save,
+        and then as an opaque toolbar. A bar that floats from the moment the
+        page loads lands on top of the controls it passes — the "Lägg till"
+        button under Kompetenser sits exactly there — so it covered a button
+        before the user had changed anything at all. Sitting in the flow until
+        the form is dirty keeps every control reachable on arrival, and once
+        the bar does appear its own surface makes it read as a bar rather than
+        a button ghosting over another one.
+      */}
+      <div
+        className={cn(
+          'z-10 flex justify-end',
+          dirty &&
+            'sticky bottom-20 rounded-[var(--radius-card)] border border-line bg-raised/95 px-3 py-2 shadow-overlay backdrop-blur lg:bottom-4',
+        )}
+      >
+        <Button variant="primary" size="lg" onClick={save} loading={saving}>
           Spara CV
         </Button>
       </div>
