@@ -119,15 +119,16 @@ function auth() {
       enabled: true,
       window: 60,
       max: config.AUTH_TEST_MODE ? 10_000 : 30,
-      customRules: config.AUTH_TEST_MODE
-        ? {}
-        : {
-            // Credential endpoints are what gets attacked; hold them tighter.
-            '/sign-in/email': { window: 60, max: 5 },
-            '/sign-up/email': { window: 60 * 60, max: 5 },
-            '/forget-password': { window: 60 * 60, max: 5 },
-            '/reset-password': { window: 60 * 60, max: 5 },
-          },
+      // The credential endpoints are what gets attacked, so they are held much
+      // tighter than the rest. In test mode the ceiling is raised rather than
+      // removed — an empty rule set would fall back to the library's own
+      // defaults, which a suite creating accounts from one IP trips at once.
+      customRules: {
+        '/sign-in/email': { window: 60, max: config.AUTH_TEST_MODE ? 10_000 : 5 },
+        '/sign-up/email': { window: 60 * 60, max: config.AUTH_TEST_MODE ? 10_000 : 5 },
+        '/forget-password': { window: 60 * 60, max: config.AUTH_TEST_MODE ? 10_000 : 5 },
+        '/reset-password': { window: 60 * 60, max: config.AUTH_TEST_MODE ? 10_000 : 5 },
+      },
     },
 
     databaseHooks: {
