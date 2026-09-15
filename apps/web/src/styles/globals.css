@@ -93,9 +93,9 @@
     --border: oklch(29% 0.01 260);
     --border-strong: oklch(38% 0.012 260);
     --text: oklch(95% 0.005 260);
-    /* ~#8B939B */
-    --text-muted: oklch(68% 0.015 250);
-    --text-subtle: oklch(58% 0.012 260);
+    /* Keep muted/subtle ≥ 4.5:1 against raised surfaces in dark mode. */
+    --text-muted: oklch(74% 0.014 250);
+    --text-subtle: oklch(70% 0.012 260);
 
     --brand: oklch(72% 0.12 165);
     --brand-hover: oklch(78% 0.12 165);
@@ -203,6 +203,19 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  [role='radio']:focus-visible,
+  [role='checkbox']:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 
   ::selection {
