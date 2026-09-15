@@ -1,13 +1,16 @@
 'use client';
 
 import {
+  displaySkillLabel,
   employerKey,
+  looksLikeRoleSkill,
   normalizeSkillList,
   roleKey,
   suggestSkillsFromExperience,
+  unifyResumeSkills,
 } from '@jobbdjungeln/core';
 import { FileUp, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
   Button,
@@ -17,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
+  ConfirmDialog,
   Dialog,
   DialogBody,
   DialogContent,
@@ -147,14 +151,26 @@ function buildImportReview(current: ResumeState, draft: ResumeDraft): ImportRevi
  * user corrects before anything is saved — the file itself is never stored, and
  * a parser guess is never treated as fact.
  */
-export function ResumeEditor({ initial }: { initial: ResumeState }) {
-  const [resume, setResume] = useState<ResumeState>(initial);
-  const [saved, setSaved] = useState<ResumeState>(initial);
+export function ResumeEditor({
+  initial,
+  accountFirstName = '',
+}: {
+  initial: ResumeState;
+  accountFirstName?: string;
+}) {
+  const unifiedInitial = (() => {
+    const unified = unifyResumeSkills(initial);
+    return { ...initial, skills: unified.skills, jobProfiles: unified.jobProfiles };
+  })();
+  const [resume, setResume] = useState<ResumeState>(unifiedInitial);
+  const [saved, setSaved] = useState<ResumeState>(unifiedInitial);
   const [skillDraft, setSkillDraft] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [parsing, setParsing] = useState(false);
   const [review, setReview] = useState<ImportReview | null>(null);
   const [saving, startSaving] = useTransition();
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const pendingHref = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function upload(file: File) {
@@ -224,9 +240,12 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
 
   function save() {
     startSaving(async () => {
-      const result = await saveResumeAction({ ...resume, jobProfiles: resume.jobProfiles });
+      const unified = unifyResumeSkills(resume);
+      const next = { ...resume, skills: unified.skills, jobProfiles: unified.jobProfiles };
+      const result = await saveResumeAction(next);
       if (result.ok) {
-        setSaved(resume);
+        setResume(next);
+        setSaved(next);
         toast.success('CV sparat');
       } else {
         setError(result.error);
@@ -252,10 +271,96 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
   const dirty = JSON.stringify(resume) !== JSON.stringify(saved);
   const wouldOverwriteHeadline = Boolean(review?.draft.headline && resume.headline);
   const wouldOverwriteSummary = Boolean(review?.draft.summary && resume.summary);
+  const firstName = accountFirstName.trim().split(/\s+/)[0] ?? '';
+  const headlineLooksLikeName =
+    Boolean(firstName) &&
+    resume.headline.trim().toLowerCase() === firstName.toLowerCase() &&
+    !/\s/.test(resume.headline.trim());
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      const href = anchor.getAttribute('href');
+      if (
+        !href ||
+        href.startsWith('#') ||
+        href.startsWith('mailto:') ||
+        href.startsWith('tel:')
+      ) {
+        return;
+      }
+      if (anchor.target === '_blank') return;
+      event.preventDefault();
+      event.stopPropagation();
+      pendingHref.current = anchor.href;
+      setLeaveOpen(true);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [dirty]);
+
+  function discardChanges() {
+    setResume(saved);
+    setError(undefined);
+  }
 
   return (
     <div className="flex flex-col gap-4">
       {error ? <ErrorNote description={error} /> : null}
+
+      <nav
+        aria-label="Hoppa till avsnitt"
+        className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted"
+      >
+        <a className="underline-offset-2 hover:text-ink hover:underline" href="#om-dig">
+          Om dig
+        </a>
+        <span aria-hidden>·</span>
+        <a className="underline-offset-2 hover:text-ink hover:underline" href="#kompetenser">
+          Kompetenser
+        </a>
+        <span aria-hidden>·</span>
+        <a className="underline-offset-2 hover:text-ink hover:underline" href="#erfarenhet">
+          Erfarenhet
+        </a>
+        <span aria-hidden>·</span>
+        <a className="underline-offset-2 hover:text-ink hover:underline" href="#utbildning">
+          Utbildning
+        </a>
+        <span aria-hidden>·</span>
+        <a className="underline-offset-2 hover:text-ink hover:underline" href="#jobbprofiler">
+          Jobbprofiler
+        </a>
+      </nav>
+
+      <ConfirmDialog
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        title="Osparade ändringar"
+        description="Du har ändringar som inte sparats. Vill du lämna sidan ändå?"
+        confirmLabel="Lämna"
+        cancelLabel="Stanna"
+        onConfirm={() => {
+          const href = pendingHref.current;
+          pendingHref.current = null;
+          setLeaveOpen(false);
+          if (href) window.location.assign(href);
+        }}
+      />
 
       <Card>
         <CardHeader>
@@ -511,12 +616,19 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         </DialogContent>
       </Dialog>
 
-      <Card>
+      <Card id="om-dig">
         <CardHeader>
           <CardTitle>Om dig</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <Field label="Rubrik" hint="Din roll i en rad, t.ex. Ekonomiassistent.">
+          <Field
+            label="Yrkesroll (rubrik)"
+            hint={
+              headlineLooksLikeName
+                ? 'Det här ser ut som ditt namn – skriv din roll, t.ex. Ekonomiassistent.'
+                : 'Din roll i en rad, t.ex. Ekonomiassistent.'
+            }
+          >
             {(props) => (
               <Input
                 {...props}
@@ -538,7 +650,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="kompetenser">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-brand" aria-hidden />
@@ -552,23 +664,56 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         <CardContent className="flex flex-col gap-3">
           <ul className="flex flex-wrap gap-2">
             {resume.skills.map((skill) => (
-              <li key={skill}>
+              <li key={skill} className="flex max-w-full flex-col gap-0.5">
                 <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft py-1 pr-1 pl-2.5 text-[13px] text-brand-text">
-                  {skill}
+                  {displaySkillLabel(skill)}
                   <button
                     type="button"
                     onClick={() =>
                       setResume({
                         ...resume,
                         skills: resume.skills.filter((value) => value !== skill),
+                        jobProfiles: resume.jobProfiles.map((profile) => ({
+                          ...profile,
+                          skills: profile.skills.filter(
+                            (value) => value.toLowerCase() !== skill.toLowerCase(),
+                          ),
+                          confirmed: profile.confirmed.filter(
+                            (value) => value.toLowerCase() !== skill.toLowerCase(),
+                          ),
+                        })),
                       })
                     }
-                    aria-label={`Ta bort ${skill}`}
+                    aria-label={`Ta bort ${displaySkillLabel(skill)}`}
                     className="rounded-full p-0.5 hover:bg-brand/20"
                   >
                     <X className="size-3" aria-hidden />
                   </button>
                 </span>
+                {looksLikeRoleSkill(skill) ? (
+                  <button
+                    type="button"
+                    className="px-1 text-left text-[11px] text-warning-text underline-offset-2 hover:underline"
+                    onClick={() =>
+                      setResume({
+                        ...resume,
+                        headline: resume.headline.trim() ? resume.headline : skill,
+                        skills: resume.skills.filter((value) => value !== skill),
+                        jobProfiles: resume.jobProfiles.map((profile) => ({
+                          ...profile,
+                          skills: profile.skills.filter(
+                            (value) => value.toLowerCase() !== skill.toLowerCase(),
+                          ),
+                          confirmed: profile.confirmed.filter(
+                            (value) => value.toLowerCase() !== skill.toLowerCase(),
+                          ),
+                        })),
+                      })
+                    }
+                  >
+                    Det här är en roll – flytta till rubriken?
+                  </button>
+                ) : null}
               </li>
             ))}
             {resume.skills.length === 0 ? (
@@ -597,7 +742,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="erfarenhet">
         <CardHeader>
           <CardTitle>Erfarenhet</CardTitle>
         </CardHeader>
@@ -740,7 +885,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="utbildning">
         <CardHeader>
           <CardTitle>Utbildning</CardTitle>
         </CardHeader>
@@ -870,12 +1015,24 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         className={cn(
           'z-10 flex justify-end',
           dirty &&
-            'sticky bottom-20 rounded-[var(--radius-card)] border border-line bg-raised/95 px-3 py-2 shadow-overlay backdrop-blur lg:bottom-4',
+            'sticky bottom-20 items-center gap-3 rounded-[var(--radius-card)] border border-line bg-raised/95 px-3 py-2 shadow-overlay backdrop-blur lg:bottom-4',
         )}
       >
-        <Button variant="primary" size="lg" onClick={save} loading={saving}>
-          Spara CV
-        </Button>
+        {dirty ? (
+          <>
+            <p className="mr-auto text-sm text-muted">Du har osparade ändringar</p>
+            <Button variant="ghost" onClick={discardChanges} disabled={saving}>
+              Ångra
+            </Button>
+            <Button variant="primary" onClick={save} loading={saving}>
+              Spara
+            </Button>
+          </>
+        ) : (
+          <Button variant="primary" size="lg" onClick={save} loading={saving}>
+            Spara CV
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -888,10 +1045,7 @@ function JobProfilesCard({
   resume: ResumeState;
   setResume: (value: ResumeState | ((current: ResumeState) => ResumeState)) => void;
 }) {
-  const suggestions = suggestSkillsFromExperience(resume.experience, [
-    ...resume.skills,
-    ...resume.jobProfiles.flatMap((profile) => [...profile.skills, ...profile.confirmed]),
-  ]);
+  const suggestions = suggestSkillsFromExperience(resume.experience, resume.skills);
 
   function updateProfile(id: string, patch: Partial<JobProfile>) {
     setResume((current) => ({
@@ -902,8 +1056,23 @@ function JobProfilesCard({
     }));
   }
 
+  function toggleProfileSkill(profile: JobProfile, skill: string, selected: boolean) {
+    if (selected) {
+      updateProfile(profile.id, {
+        skills: normalizeSkillList([...profile.skills, skill]),
+        confirmed: normalizeSkillList([...profile.confirmed, skill]),
+      });
+      return;
+    }
+    updateProfile(profile.id, {
+      skills: profile.skills.filter((item) => item.toLowerCase() !== skill.toLowerCase()),
+      confirmed: profile.confirmed.filter((item) => item.toLowerCase() !== skill.toLowerCase()),
+    });
+  }
+
   function addSuggested(label: string) {
     setResume((current) => {
+      const skills = normalizeSkillList([...current.skills, label]);
       const profiles =
         current.jobProfiles.length > 0
           ? current.jobProfiles
@@ -916,13 +1085,15 @@ function JobProfilesCard({
               },
             ];
       const [first, ...rest] = profiles;
-      if (!first) return current;
+      if (!first) return { ...current, skills };
       return {
         ...current,
+        skills,
         jobProfiles: [
           {
             ...first,
             skills: normalizeSkillList([...first.skills, label]),
+            confirmed: normalizeSkillList([...first.confirmed, label]),
           },
           ...rest,
         ],
@@ -931,79 +1102,128 @@ function JobProfilesCard({
   }
 
   return (
-    <Card>
+    <Card id="jobbprofiler">
       <CardHeader>
         <CardTitle>Jobbprofiler</CardTitle>
         <CardDescription>
-          En lins mot matchningen. Markera „har det” på kompetenser du kan stå för — det är de
-          som räknas mot annonserna.
+          En namngiven lins över dina kompetenser. Välj vilka som ska räknas för just den här
+          profilen — osäkra undantag listar du separat.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {resume.jobProfiles.map((profile, index) => (
-          <fieldset
-            key={profile.id}
-            className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line p-3"
-          >
-            <legend className="sr-only">Profil {index + 1}</legend>
-            <Field label="Namn">
-              {(props) => (
-                <Input
-                  {...props}
-                  value={profile.label}
-                  onChange={(event) => updateProfile(profile.id, { label: event.target.value })}
-                />
-              )}
-            </Field>
-            <ul className="flex flex-col gap-1.5">
-              {profile.skills.length === 0 ? (
-                <li className="text-sm text-muted">Inga kompetenser i profilen ännu.</li>
+        {resume.jobProfiles.map((profile, index) => {
+          const uncertain = profile.skills.filter(
+            (skill) =>
+              !profile.confirmed.some((item) => item.toLowerCase() === skill.toLowerCase()),
+          );
+          return (
+            <fieldset
+              key={profile.id}
+              className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line p-3"
+            >
+              <legend className="sr-only">Profil {index + 1}</legend>
+              <Field label="Namn">
+                {(props) => (
+                  <Input
+                    {...props}
+                    value={profile.label}
+                    onChange={(event) =>
+                      updateProfile(profile.id, { label: event.target.value })
+                    }
+                  />
+                )}
+              </Field>
+              {resume.skills.length === 0 ? (
+                <p className="text-sm text-muted">
+                  Lägg till kompetenser ovanför först — profilen väljer ur den listan.
+                </p>
               ) : (
-                profile.skills.map((skill) => {
-                  const confirmed = profile.confirmed.some(
-                    (item) => item.toLowerCase() === skill.toLowerCase(),
-                  );
-                  return (
-                    <li key={skill}>
-                      <div className="flex items-center gap-2 text-sm text-ink">
-                        <Checkbox
-                          checked={confirmed}
-                          onCheckedChange={(value) =>
+                <ul className="flex flex-col gap-1.5">
+                  {resume.skills.map((skill) => {
+                    const selected = profile.skills.some(
+                      (item) => item.toLowerCase() === skill.toLowerCase(),
+                    );
+                    return (
+                      <li key={skill}>
+                        <div className="flex items-center gap-2 text-sm text-ink">
+                          <Checkbox
+                            checked={selected}
+                            aria-label={`Inkludera ${displaySkillLabel(skill)} i profilen`}
+                            onCheckedChange={(value) =>
+                              toggleProfileSkill(profile, skill, value === true)
+                            }
+                          />
+                          <span>{displaySkillLabel(skill)}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {uncertain.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">Osäkra undantag</h3>
+                  <p className="mt-1 text-[12px] text-subtle">
+                    Allt i profilen räknas som „har det” tills du markerar något som osäkert.
+                  </p>
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {uncertain.map((skill) => (
+                      <li
+                        key={skill}
+                        className="flex items-center justify-between gap-2 text-sm text-ink"
+                      >
+                        <span>{displaySkillLabel(skill)} · osäker</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
                             updateProfile(profile.id, {
-                              confirmed:
-                                value === true
-                                  ? normalizeSkillList([...profile.confirmed, skill])
-                                  : profile.confirmed.filter(
-                                      (item) => item.toLowerCase() !== skill.toLowerCase(),
-                                    ),
+                              confirmed: normalizeSkillList([...profile.confirmed, skill]),
                             })
                           }
-                        />
-                        <span>{skill}</span>
-                        <span className="text-[12px] text-subtle">
-                          {confirmed ? 'har det' : 'osäker'}
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() =>
-                setResume({
-                  ...resume,
-                  jobProfiles: resume.jobProfiles.filter((item) => item.id !== profile.id),
-                })
-              }
-            >
-              <Trash2 aria-hidden />
-              Ta bort profilen
-            </Button>
-          </fieldset>
-        ))}
+                        >
+                          Jag kan detta
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : profile.skills.length > 0 ? (
+                <p className="text-[13px] text-muted">
+                  Alla valda kompetenser räknas som „har det”.
+                  <button
+                    type="button"
+                    className="ml-1 underline underline-offset-2"
+                    onClick={() => {
+                      const first = profile.skills[0];
+                      if (!first) return;
+                      updateProfile(profile.id, {
+                        confirmed: profile.confirmed.filter(
+                          (item) => item.toLowerCase() !== first.toLowerCase(),
+                        ),
+                      });
+                    }}
+                  >
+                    Markera en som osäker
+                  </button>
+                </p>
+              ) : null}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setResume({
+                    ...resume,
+                    jobProfiles: resume.jobProfiles.filter((item) => item.id !== profile.id),
+                  })
+                }
+              >
+                <Trash2 aria-hidden />
+                Ta bort profilen
+              </Button>
+            </fieldset>
+          );
+        })}
 
         {resume.jobProfiles.length < 10 ? (
           <Button
@@ -1018,7 +1238,7 @@ function JobProfilesCard({
                     id: newId(),
                     label: resume.headline || `Profil ${resume.jobProfiles.length + 1}`,
                     skills: [...resume.skills],
-                    confirmed: [],
+                    confirmed: [...resume.skills],
                   },
                 ],
               })
@@ -1039,7 +1259,7 @@ function JobProfilesCard({
                   className="flex items-center justify-between gap-2 text-sm"
                 >
                   <span>
-                    {item.label}
+                    {displaySkillLabel(item.label)}
                     <span className="ml-2 text-[12px] text-subtle">{item.source}</span>
                   </span>
                   <Button size="sm" variant="ghost" onClick={() => addSuggested(item.label)}>

@@ -1,6 +1,6 @@
 'use server';
 
-import { normalizeSkillList } from '@jobbdjungeln/core';
+import { normalizeSkillList, unifyResumeSkills } from '@jobbdjungeln/core';
 import { schema } from '@jobbdjungeln/db';
 import {
   extractText,
@@ -76,21 +76,24 @@ export async function saveResumeAction(input: unknown): Promise<ActionResult<voi
   const parsed = resumeSchema.safeParse(input);
   if (!parsed.success) return fromZod(parsed.error);
 
+  const unified = unifyResumeSkills({
+    skills: parsed.data.skills,
+    jobProfiles: parsed.data.jobProfiles,
+  });
+
   const values = {
     headline: parsed.data.headline,
     summary: parsed.data.summary,
-    skills: normalizeSkillList(parsed.data.skills),
+    skills: unified.skills,
     experience: parsed.data.experience.map((entry) => ({
       ...entry,
       id: entry.id || entryId(),
       skills: normalizeSkillList(entry.skills),
     })),
     education: parsed.data.education.map((entry) => ({ ...entry, id: entry.id || entryId() })),
-    jobProfiles: parsed.data.jobProfiles.map((profile) => ({
+    jobProfiles: unified.jobProfiles.map((profile) => ({
       ...profile,
       id: profile.id || entryId(),
-      skills: normalizeSkillList(profile.skills),
-      confirmed: normalizeSkillList(profile.confirmed),
     })),
   };
 

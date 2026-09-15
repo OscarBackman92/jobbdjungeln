@@ -142,3 +142,36 @@ export function normalizeSkillList(skills: readonly string[]): string[] {
   }
   return out;
 }
+
+const ROLE_LIKE_CANONICALS = new Set(
+  [
+    'Ekonomiassistent',
+    'IT-support',
+    'Orderadministration',
+    'Kundtjänst',
+    'Projektledning',
+  ].map((label) => label.toLowerCase()),
+);
+
+const ROLE_SUFFIX =
+  /(assistent|utvecklare|ingenjör|ingenjor|chef|handläggare|handlaggare|specialist|koordinator|tekniker|administratör|administrator|manager|konsult)$/i;
+
+/** Labels that look like a job title rather than a skill or tool. */
+export function looksLikeRoleSkill(label: string): boolean {
+  const text = canonicalSkillLabel(label);
+  if (!text) return false;
+  if (ROLE_LIKE_CANONICALS.has(text.toLowerCase())) return true;
+  return ROLE_SUFFIX.test(text.replace(/\s+/g, ''));
+}
+
+/**
+ * UI display form: capitalise the first letter, keep known acronyms as-is.
+ * Matching still uses {@link canonicalSkillLabel}.
+ */
+export function displaySkillLabel(label: string): string {
+  const text = canonicalSkillLabel(label) || String(label ?? '').trim();
+  if (!text) return '';
+  if (/^[A-Z0-9][A-Z0-9.+#/-]{0,8}$/.test(text)) return text;
+  if (text !== text.toLowerCase()) return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
