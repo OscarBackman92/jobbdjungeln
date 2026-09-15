@@ -5,6 +5,12 @@ import { ThemeProvider } from 'next-themes';
 import { useState } from 'react';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui';
+import { normalizeThemeStorage } from '@/lib/theme';
+
+// Migrate legacy values (e.g. "daylight") before next-themes reads storage.
+if (typeof window !== 'undefined') {
+  normalizeThemeStorage();
+}
 
 /**
  * Client-side providers.

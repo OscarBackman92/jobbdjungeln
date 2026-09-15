@@ -3,13 +3,14 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useId, useState } from 'react';
+import { migrateStoredTheme, type ThemeValue } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 const OPTIONS = [
   { value: 'light', label: 'Ljust', icon: Sun },
   { value: 'system', label: 'System', icon: Monitor },
   { value: 'dark', label: 'Mörkt', icon: Moon },
-] as const;
+] as const satisfies ReadonlyArray<{ value: ThemeValue; label: string; icon: typeof Sun }>;
 
 /**
  * Light / system / dark.
@@ -23,28 +24,29 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   const name = useId();
 
-  // The server cannot know the visitor's theme, so nothing is marked as chosen
-  // until the client has read it — otherwise the markup would not match.
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    const migrated = migrateStoredTheme(theme);
+    if (theme && theme !== migrated) setTheme(migrated);
+  }, [theme, setTheme]);
+
+  const selected: ThemeValue | null = mounted ? migrateStoredTheme(theme) : null;
 
   return (
     <fieldset className="inline-flex items-center gap-0.5 rounded-full bg-sunken p-0.5">
       <legend className="sr-only">Utseende</legend>
       {OPTIONS.map(({ value, label, icon: Icon }) => {
-        const active = mounted && theme === value;
+        const active = selected === value;
         return (
           <label
             key={value}
             className={cn(
               'relative cursor-pointer rounded-full p-1.5 transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)]',
-              active ? 'bg-raised text-ink shadow-card' : 'text-subtle hover:text-ink',
+              active
+                ? 'bg-brand-soft text-brand-text shadow-card'
+                : 'text-subtle hover:bg-hover hover:text-ink',
             )}
           >
-            {/*
-              The input covers the whole swatch rather than hiding in a corner:
-              it stays the thing that is clicked, so the hit area matches what
-              the eye sees and the icon never gets in the way.
-            */}
             <input
               type="radio"
               name={name}
