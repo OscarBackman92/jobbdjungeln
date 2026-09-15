@@ -20,8 +20,10 @@ export function DialogContent({
       <DialogPrimitive.Content
         className={cn(
           // Full height on a phone, a centred sheet from `sm` up.
-          // No overflow-hidden here: the scroll surface is DialogBody (min-h-0).
-          'fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl border border-line bg-raised shadow-overlay',
+          // overflow-hidden + max-h keeps the sheet bounded so DialogBody
+          // (min-h-0, overflow-y-auto) is the only scroll surface — without
+          // it the whole dialog grows and a sticky footer floats mid-form.
+          'fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col overflow-hidden rounded-t-2xl border border-line bg-raised shadow-overlay',
           'sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[85dvh] sm:w-[min(42rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[var(--radius-card)]',
           className,
         )}
@@ -43,7 +45,7 @@ export function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'sticky top-0 z-10 flex shrink-0 flex-col gap-1 border-b border-line bg-raised px-5 py-4 pr-14',
+        'flex shrink-0 flex-col gap-1 border-b border-line bg-raised px-5 py-4 pr-14',
         className,
       )}
       {...props}
@@ -90,7 +92,10 @@ export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'sticky bottom-0 z-10 flex shrink-0 flex-col-reverse gap-2 border-t border-line bg-raised px-5 py-4 sm:flex-row sm:justify-end',
+        // Sibling of the scrolling DialogBody — not sticky. Sticky bottom
+        // floated the actions over mid-form fields when the dialog itself
+        // became the scroll container.
+        'flex shrink-0 flex-col-reverse gap-2 border-t border-line bg-raised px-5 py-4 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}
