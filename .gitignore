@@ -27,3 +27,7 @@ Thumbs.db
 # Next build output is per-machine
 next-env.d.ts
 .vercel
+
+# Temporary Django ETL cache — do not commit
+packages/db/.import-cache/
+.env.vercel.tmp

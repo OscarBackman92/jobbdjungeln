@@ -596,7 +596,8 @@ export function planImport(
     const primary = addresses.find((row) => row.primary) ?? addresses[0];
     const email = (primary?.email || user.email).trim().toLowerCase();
     if (!email) {
-      errors.push(`användare ${user.id} saknar e-post`);
+      warnings.push(`hoppar över användare ${user.id}: saknar e-post`);
+      keptUserIds.delete(user.id);
       continue;
     }
     const existingEmail = usedEmails.get(email);
@@ -987,7 +988,7 @@ export async function fetchDjangoDump(query: QueryRows): Promise<DjangoDump> {
     from core_resume
   `);
   const periods = await query<Record<string, unknown>>(`
-    select id, user_id, year, month, submitted_at, note, created_at
+    select id, user_id, year, month, submitted_at, note
     from core_reportperiod
   `);
   const activities = await query<Record<string, unknown>>(`
@@ -1106,7 +1107,8 @@ export async function fetchDjangoDump(query: QueryRows): Promise<DjangoDump> {
       month: numberField(row, 'month'),
       submittedAt: asDate(row.submitted_at),
       note: asString(row.note),
-      createdAt: asDate(row.created_at),
+      // Django saknade created_at — använd submitted_at när det finns.
+      createdAt: asDate(row.submitted_at),
     })),
     activities: activities.map((row) => ({
       id: numberField(row, 'id'),

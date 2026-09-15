@@ -9,10 +9,14 @@ import { type NextRequest, NextResponse } from 'next/server';
  * every navigation. Validation still happens in the app layout, which is what
  * actually protects the data; this exists so an anonymous visitor gets a clean
  * redirect instead of a streamed shell they cannot use.
+ *
+ * Do not bounce cookie-holders away from /logga-in here. A stale cookie (for
+ * example after the DB was replaced) would loop: guest pages → /oversikt →
+ * requireUser → /logga-in → guest pages. Those pages already redirect when
+ * getSession() confirms a real user.
  */
 
 const PROTECTED = ['/oversikt', '/sparade', '/ansokningar', '/annonser', '/rapport', '/profil'];
-const GUEST_ONLY = ['/logga-in', '/skapa-konto'];
 
 export default function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -23,10 +27,6 @@ export default function proxy(request: NextRequest) {
     // Come back to where they were headed once they are signed in.
     url.searchParams.set('nasta', `${pathname}${search}`);
     return NextResponse.redirect(url);
-  }
-
-  if (hasSession && GUEST_ONLY.some((path) => pathname.startsWith(path))) {
-    return NextResponse.redirect(new URL('/oversikt', request.url));
   }
 
   return NextResponse.next();
@@ -40,7 +40,5 @@ export const config = {
     '/annonser/:path*',
     '/rapport/:path*',
     '/profil/:path*',
-    '/logga-in',
-    '/skapa-konto',
   ],
 };
