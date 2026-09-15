@@ -181,6 +181,10 @@ export interface ReportRow {
   lank: string;
   anteckning: string;
   missingOccupation: boolean;
+  /** Set when appliedAt is later than an interview/contact for the same job. */
+  dateWarning: string | null;
+  /** Application id for job rows (and events that belong to one). */
+  applicationId: string | null;
 }
 
 /** AF asks "Svarade du på en annons?" — only true for real ad responses. */

@@ -129,6 +129,8 @@ describe('AF form output', () => {
         lank: 'https://example.test/ad',
         anteckning: 'Ekonomiassistent',
         missingOccupation: false,
+        dateWarning: null,
+        applicationId: '1',
       }),
     ).toBe('Ekonomiassistent\tAcme AB\tHeltid\tStockholm\tJa\t2026-03-04');
   });
