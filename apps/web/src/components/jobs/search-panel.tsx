@@ -1,9 +1,10 @@
 'use client';
 
 import { pluralWord } from '@jobbdjungeln/core';
-import { regionLabel, type SearchSort } from '@jobbdjungeln/jobtech';
+import { regionLabel } from '@jobbdjungeln/jobtech';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
@@ -18,15 +19,17 @@ import { SearchInsight } from '@/components/jobs/search-insight';
 import {
   EMPTY_SEARCH,
   formatSwedishList,
+  parseUiSort,
   type SearchState,
-  sameSearchState,
+  samePanelFilters,
+  toJobTechSort,
+  type UiSort,
 } from '@/components/jobs/search-state';
 import {
   Button,
   Checkbox,
   EmptyState,
   ErrorNote,
-  Field,
   Input,
   Label,
   Select,
@@ -35,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
+  Switch,
 } from '@/components/ui';
 
 export type { SearchState } from '@/components/jobs/search-state';
@@ -67,10 +71,11 @@ const PUBLISHED_CHIPS: ReadonlyArray<{ label: string; minutes: string }> = [
   { label: '30 dagar', minutes: String(30 * 24 * 60) },
 ];
 
-const SORT_OPTIONS: ReadonlyArray<{ value: SearchSort; label: string }> = [
+const SORT_OPTIONS: ReadonlyArray<{ value: UiSort; label: string; needsQuery?: boolean }> = [
   { value: 'pubdate-desc', label: 'Nyast först' },
-  { value: 'relevance', label: 'Bäst match mot sökfras' },
-  { value: 'applydate-asc', label: 'Sista ansökningsdag snartast' },
+  { value: 'applydate-asc', label: 'Sista ansökningsdag först' },
+  { value: 'cv-match', label: 'Bäst CV-match' },
+  { value: 'relevance', label: 'Mest relevant för sökordet', needsQuery: true },
 ];
 
 function unique(values: readonly string[]): string[] {
@@ -78,10 +83,6 @@ function unique(values: readonly string[]): string[] {
 }
 
 function stateFromParams(params: URLSearchParams): SearchState {
-  const sort = params.get('sort');
-  const validSort = SORT_OPTIONS.some((option) => option.value === sort)
-    ? (sort as SearchSort)
-    : 'pubdate-desc';
   return {
     q: params.get('q') ?? '',
     regions: unique(params.getAll('region')),
@@ -89,7 +90,7 @@ function stateFromParams(params: URLSearchParams): SearchState {
     fields: unique(params.getAll('omrade')),
     groups: unique(params.getAll('yrkesgrupp')),
     remote: params.get('distans') === '1',
-    sort: validSort,
+    sort: parseUiSort(params.get('sort')),
     publishedAfter: params.get('publicerad') ?? '',
     noExperience: params.get('erfarenhet') === '0',
     matchCv: params.get('cv') !== '0',
@@ -118,7 +119,9 @@ function toUrlParams(state: SearchState): URLSearchParams {
 
 function toApiParams(state: SearchState, offset: number): string {
   const params = toUrlParams(state);
-  if (state.sort === 'pubdate-desc') params.set('sort', 'pubdate-desc');
+  // Match is always computed; `cv=0` only hides badges in the UI.
+  params.delete('cv');
+  params.set('sort', toJobTechSort(state.sort));
   params.set('offset', String(offset));
   params.set('limit', String(PAGE_SIZE));
   return params.toString();
@@ -127,7 +130,7 @@ function toApiParams(state: SearchState, offset: number): string {
 /** Count-only query string — no CV scoring, limit=0. */
 function toCountParams(state: SearchState): string {
   const params = toUrlParams(state);
-  if (state.sort === 'pubdate-desc') params.set('sort', 'pubdate-desc');
+  params.set('sort', toJobTechSort(state.sort));
   params.set('offset', '0');
   params.set('limit', '0');
   params.set('cv', '0');
@@ -190,7 +193,9 @@ export function SearchPanel({
   const searchParams = useSearchParams();
   const remoteId = useId();
   const experienceId = useId();
-  const matchCvId = useId();
+  const showCvMatchId = useId();
+  const sortLabelId = useId();
+  const resultsHeadingId = useId();
 
   const initial = useMemo(() => stateFromParams(searchParams), [searchParams]);
   const [draft, setDraft] = useState<SearchState>(initial);
@@ -226,9 +231,21 @@ export function SearchPanel({
 
   const regionKey = [...draft.regions, ...applied.regions].sort().join(',');
   const fieldKey = [...draft.fields, ...applied.fields].sort().join(',');
-  const draftDirty = !sameSearchState(draft, applied);
+  const draftDirty = !samePanelFilters(draft, applied);
   const filterPanelId = 'annonser-filter-panel';
   const activeFilterCount = countActiveFiltersExcludingQuery(applied);
+
+  useEffect(() => {
+    if (applied.q.trim()) return;
+    if (applied.sort !== 'relevance') return;
+    const next = { ...applied, sort: 'pubdate-desc' as const };
+    setDraft((current) => ({ ...current, sort: 'pubdate-desc' }));
+    setApplied(next);
+    setDebouncedDraft((current) => ({ ...current, sort: 'pubdate-desc' }));
+    const params = toUrlParams(next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [applied, pathname, router]);
 
   const {
     data: filters,
@@ -297,7 +314,21 @@ export function SearchPanel({
     refetch,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['jobs', applied],
+    // `matchCv` only toggles badge visibility — keep it out of the query key.
+    queryKey: [
+      'jobs',
+      {
+        q: applied.q,
+        regions: applied.regions,
+        municipalities: applied.municipalities,
+        fields: applied.fields,
+        groups: applied.groups,
+        remote: applied.remote,
+        sort: toJobTechSort(applied.sort),
+        publishedAfter: applied.publishedAfter,
+        noExperience: applied.noExperience,
+      },
+    ],
     enabled: urlReady,
     initialPageParam: 0,
     placeholderData: keepPreviousData,
@@ -320,7 +351,7 @@ export function SearchPanel({
   const showInitialSkeleton = searching && hits.length === 0 && !isFetched;
 
   const countReady = typeof draftCount === 'number';
-  const draftSettled = sameSearchState(draft, debouncedDraft);
+  const draftSettled = samePanelFilters(draft, debouncedDraft);
   const counting = showFilters && (!draftSettled || draftCountPending || draftCountFetching);
   const applyDisabled = showFilters && countReady && draftCount === 0 && draftSettled;
   const applyLabel =
@@ -340,6 +371,17 @@ export function SearchPanel({
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
+  /** Sort / CV visibility — apply immediately without touching other draft filters. */
+  function applyToolbar(patch: Partial<Pick<SearchState, 'sort' | 'matchCv'>>) {
+    const nextApplied = { ...applied, ...patch };
+    setApplied(nextApplied);
+    setDraft((current) => ({ ...current, ...patch }));
+    setDebouncedDraft((current) => ({ ...current, ...patch }));
+    const params = toUrlParams(nextApplied);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
   function resetDraftToApplied() {
     setDraft(applied);
     setDebouncedDraft(applied);
@@ -347,8 +389,12 @@ export function SearchPanel({
   }
 
   function clearDraftSelections() {
-    // Clears panel selections only — search phrase stays in the field.
-    setDraft({ ...EMPTY, q: draft.q });
+    setDraft({
+      ...EMPTY,
+      q: draft.q,
+      sort: applied.sort,
+      matchCv: applied.matchCv,
+    });
     setRegionDropNotice(null);
   }
 
@@ -560,33 +606,8 @@ export function SearchPanel({
               emptyHint="Inga yrkesgrupper hittades för valt område."
             />
 
-            <Field label="Sortera resultat">
-              {(props) => (
-                <Select
-                  value={draft.sort}
-                  onValueChange={(value) => setDraft({ ...draft, sort: value as SearchSort })}
-                >
-                  <SelectTrigger {...props}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SORT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </Field>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-[13px] font-medium text-ink">
-                Visa endast nyligen publicerade
-              </span>
-              <p className="text-[12px] text-subtle">
-                Filtrerar bort äldre annonser. Skilt från sorteringen ovan.
-              </p>
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-[13px] font-medium text-ink">Publicerad</span>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -594,7 +615,7 @@ export function SearchPanel({
                   variant={draft.publishedAfter === '' ? 'secondary' : 'ghost'}
                   onClick={() => setDraft({ ...draft, publishedAfter: '' })}
                 >
-                  Alla datum
+                  Alla
                 </Button>
                 {PUBLISHED_CHIPS.map((chip) => (
                   <Button
@@ -631,17 +652,6 @@ export function SearchPanel({
               />
               <Label htmlFor={experienceId} className="font-normal">
                 Utan krav på erfarenhet
-              </Label>
-            </span>
-
-            <span className="flex items-center gap-2">
-              <Checkbox
-                id={matchCvId}
-                checked={draft.matchCv}
-                onCheckedChange={(value) => setDraft({ ...draft, matchCv: value === true })}
-              />
-              <Label htmlFor={matchCvId} className="font-normal">
-                Matcha mot CV
               </Label>
             </span>
 
@@ -750,24 +760,78 @@ export function SearchPanel({
         />
       ) : (
         <>
-          <p className="text-[13px] text-subtle" aria-live="polite">
-            {filtered ? (
-              <>
-                <span className="font-medium text-ink tabular-nums">
-                  {total.toLocaleString('sv-SE')}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2
+              id={resultsHeadingId}
+              tabIndex={-1}
+              className="text-[13px] text-subtle outline-none"
+              aria-live="polite"
+            >
+              {filtered ? (
+                <>
+                  <span className="font-medium text-ink tabular-nums">
+                    {total.toLocaleString('sv-SE')}
+                  </span>
+                  {` ${pluralWord(total, 'annons', 'annonser')} matchar dina filter`}
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-ink tabular-nums">
+                    {total.toLocaleString('sv-SE')}
+                  </span>
+                  {` ${pluralWord(total, 'annons', 'annonser')} i Platsbanken`}
+                </>
+              )}
+            </h2>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-[13px] text-ink">
+                <span id={sortLabelId} className="text-subtle">
+                  Sortera:
                 </span>
-                {` ${pluralWord(total, 'annons', 'annonser')} matchar dina filter`}
-              </>
-            ) : (
-              <>
-                <span className="font-medium text-ink tabular-nums">
-                  {total.toLocaleString('sv-SE')}
+                <Select
+                  value={applied.sort}
+                  onValueChange={(value) => applyToolbar({ sort: value as UiSort })}
+                >
+                  <SelectTrigger
+                    aria-labelledby={sortLabelId}
+                    className="h-8 w-auto min-w-[12rem] gap-1.5 px-2 text-[13px]"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_OPTIONS.filter(
+                      (option) => !option.needsQuery || Boolean(applied.q.trim()),
+                    ).map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {hasResume ? (
+                <span className="flex items-center gap-2 text-[13px] text-ink">
+                  <Switch
+                    id={showCvMatchId}
+                    checked={applied.matchCv}
+                    onCheckedChange={(value) => applyToolbar({ matchCv: value })}
+                  />
+                  <Label htmlFor={showCvMatchId} className="font-normal">
+                    Visa CV-match
+                  </Label>
                 </span>
-                {` ${pluralWord(total, 'annons', 'annonser')} i Platsbanken`}
-              </>
-            )}
-            {!hasResume ? ' · lägg in ditt CV under Profil för att se hur väl du matchar' : ''}
-          </p>
+              ) : (
+                <Link
+                  href="/profil"
+                  className="text-[13px] font-medium text-brand-text underline-offset-2 hover:underline"
+                >
+                  Lägg in ditt CV för att se matchning
+                </Link>
+              )}
+            </div>
+          </div>
 
           {filtered && typeof baseline === 'number' && baseline > 0 ? (
             <div
@@ -789,7 +853,7 @@ export function SearchPanel({
           <ul className="flex flex-col gap-3">
             {hits.map((job) => (
               <li key={job.id}>
-                <JobCard job={job} />
+                <JobCard job={job} showMatch={applied.matchCv} />
               </li>
             ))}
           </ul>
