@@ -17,6 +17,7 @@ export interface SavedSearch {
   occupationFields: string[];
   occupationGroups: string[];
   remote: boolean;
+  matchCv: boolean;
 }
 
 /**
@@ -35,7 +36,7 @@ export function SavedSearches({
   onUse: (
     state: Pick<
       SearchState,
-      'q' | 'regions' | 'municipalities' | 'fields' | 'groups' | 'remote'
+      'q' | 'regions' | 'municipalities' | 'fields' | 'groups' | 'remote' | 'matchCv'
     >,
   ) => void;
 }) {
@@ -63,7 +64,7 @@ export function SavedSearches({
         occupationFields: current.fields,
         occupationGroups: current.groups,
         remote: current.remote,
-        matchCv: false,
+        matchCv: current.matchCv,
         digestOptIn: true,
       });
       if (result.ok) {
@@ -101,6 +102,7 @@ export function SavedSearches({
                 fields: search.occupationFields,
                 groups: search.occupationGroups,
                 remote: search.remote,
+                matchCv: search.matchCv,
               })
             }
             className="rounded-l-full outline-none"

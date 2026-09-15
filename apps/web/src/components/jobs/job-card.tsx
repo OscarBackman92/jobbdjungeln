@@ -20,6 +20,7 @@ import { Badge, Button, Card } from '@/components/ui';
 import {
   createApplicationAction,
   deleteApplicationAction,
+  findSimilarAction,
 } from '@/server/actions/applications';
 
 export interface JobHit {
@@ -77,6 +78,14 @@ export function JobCard({ job }: { job: JobHit }) {
     }
 
     startTransition(async () => {
+      const similar = await findSimilarAction({
+        company: job.companyName,
+        title: job.title,
+        sourceJobId: job.id,
+      });
+      if (similar.ok && similar.data.length > 0) {
+        toast.message(`Du har redan ${similar.data[0]?.company}: ${similar.data[0]?.title}.`);
+      }
       const result = await createApplicationAction({
         company: job.companyName,
         title: job.title,

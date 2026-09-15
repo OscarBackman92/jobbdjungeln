@@ -1,6 +1,11 @@
 'use client';
 
-import { employerKey, normalizeSkillList, roleKey } from '@jobbdjungeln/core';
+import {
+  employerKey,
+  normalizeSkillList,
+  roleKey,
+  suggestSkillsFromExperience,
+} from '@jobbdjungeln/core';
 import { FileUp, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -25,7 +30,7 @@ import {
   Textarea,
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { type ResumeDraft, parseResumeAction, saveResumeAction } from '@/server/actions/resume';
+import { parseResumeAction, type ResumeDraft, saveResumeAction } from '@/server/actions/resume';
 
 interface Experience {
   id: string;
@@ -51,6 +56,14 @@ export interface ResumeState {
   skills: string[];
   experience: Experience[];
   education: Education[];
+  jobProfiles: JobProfile[];
+}
+
+interface JobProfile {
+  id: string;
+  label: string;
+  skills: string[];
+  confirmed: string[];
 }
 
 function newId(): string {
@@ -191,7 +204,10 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
           ...current.experience.filter(
             (entry) => !overwriteKeys.has(experienceDupKey(entry.employer, entry.role)),
           ),
-          ...selectedExperience.map((item) => ({ ...item.entry, id: item.entry.id || newId() })),
+          ...selectedExperience.map((item) => ({
+            ...item.entry,
+            id: item.entry.id || newId(),
+          })),
         ],
         education: [
           ...current.education.filter(
@@ -199,6 +215,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
           ),
           ...selectedEducation.map((item) => ({ ...item.entry, id: item.entry.id || newId() })),
         ],
+        jobProfiles: current.jobProfiles,
       };
     });
     setReview(null);
@@ -207,7 +224,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
 
   function save() {
     startSaving(async () => {
-      const result = await saveResumeAction({ ...resume, jobProfiles: [] });
+      const result = await saveResumeAction({ ...resume, jobProfiles: resume.jobProfiles });
       if (result.ok) {
         setSaved(resume);
         toast.success('CV sparat');
@@ -287,7 +304,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                   <section className="flex flex-col gap-2">
                     <h3 className="text-sm font-semibold text-ink">Rubrik & sammanfattning</h3>
                     {review.draft.headline ? (
-                      <label className="flex items-start gap-2 text-sm text-ink">
+                      <div className="flex items-start gap-2 text-sm text-ink">
                         <Checkbox
                           checked={review.overwriteHeadline}
                           onCheckedChange={(value) =>
@@ -305,10 +322,10 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                                 : 'Fyller i rubriken om du markerar.'}
                           </span>
                         </span>
-                      </label>
+                      </div>
                     ) : null}
                     {review.draft.summary ? (
-                      <label className="flex items-start gap-2 text-sm text-ink">
+                      <div className="flex items-start gap-2 text-sm text-ink">
                         <Checkbox
                           checked={review.overwriteSummary}
                           onCheckedChange={(value) =>
@@ -329,7 +346,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                             {review.draft.summary}
                           </span>
                         </span>
-                      </label>
+                      </div>
                     ) : null}
                   </section>
                 )}
@@ -351,7 +368,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                     <ul className="flex flex-col gap-1.5">
                       {review.skills.map((item, index) => (
                         <li key={item.value}>
-                          <label className="flex items-center gap-2 text-sm text-ink">
+                          <div className="flex items-center gap-2 text-sm text-ink">
                             <Checkbox
                               checked={item.checked}
                               onCheckedChange={(value) =>
@@ -366,10 +383,12 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                             <span>
                               {item.value}
                               {item.duplicate ? (
-                                <span className="ml-1.5 text-[12px] text-subtle">finns redan</span>
+                                <span className="ml-1.5 text-[12px] text-subtle">
+                                  finns redan
+                                </span>
                               ) : null}
                             </span>
-                          </label>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -393,7 +412,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                     <ul className="flex flex-col gap-1.5">
                       {review.experience.map((item, index) => (
                         <li key={item.entry.id || index}>
-                          <label className="flex items-start gap-2 text-sm text-ink">
+                          <div className="flex items-start gap-2 text-sm text-ink">
                             <Checkbox
                               checked={item.checked}
                               onCheckedChange={(value) =>
@@ -407,7 +426,9 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                               className="mt-0.5"
                             />
                             <span>
-                              <span className="font-medium">{item.entry.role || 'Roll saknas'}</span>
+                              <span className="font-medium">
+                                {item.entry.role || 'Roll saknas'}
+                              </span>
                               {item.entry.employer ? ` · ${item.entry.employer}` : ''}
                               {item.entry.start ? (
                                 <span className="text-muted">
@@ -422,7 +443,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                                 </span>
                               ) : null}
                             </span>
-                          </label>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -446,7 +467,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                     <ul className="flex flex-col gap-1.5">
                       {review.education.map((item, index) => (
                         <li key={item.entry.id || index}>
-                          <label className="flex items-start gap-2 text-sm text-ink">
+                          <div className="flex items-start gap-2 text-sm text-ink">
                             <Checkbox
                               checked={item.checked}
                               onCheckedChange={(value) =>
@@ -470,7 +491,7 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
                                 </span>
                               ) : null}
                             </span>
-                          </label>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -833,6 +854,8 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         </CardContent>
       </Card>
 
+      <JobProfilesCard resume={resume} setResume={setResume} />
+
       {/*
         The save bar only follows the scroll once there is something to save,
         and then as an opaque toolbar. A bar that floats from the moment the
@@ -855,5 +878,179 @@ export function ResumeEditor({ initial }: { initial: ResumeState }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function JobProfilesCard({
+  resume,
+  setResume,
+}: {
+  resume: ResumeState;
+  setResume: (value: ResumeState | ((current: ResumeState) => ResumeState)) => void;
+}) {
+  const suggestions = suggestSkillsFromExperience(resume.experience, [
+    ...resume.skills,
+    ...resume.jobProfiles.flatMap((profile) => [...profile.skills, ...profile.confirmed]),
+  ]);
+
+  function updateProfile(id: string, patch: Partial<JobProfile>) {
+    setResume((current) => ({
+      ...current,
+      jobProfiles: current.jobProfiles.map((profile) =>
+        profile.id === id ? { ...profile, ...patch } : profile,
+      ),
+    }));
+  }
+
+  function addSuggested(label: string) {
+    setResume((current) => {
+      const profiles =
+        current.jobProfiles.length > 0
+          ? current.jobProfiles
+          : [
+              {
+                id: newId(),
+                label: current.headline || 'Mitt jobbsök',
+                skills: [],
+                confirmed: [],
+              },
+            ];
+      const [first, ...rest] = profiles;
+      if (!first) return current;
+      return {
+        ...current,
+        jobProfiles: [
+          {
+            ...first,
+            skills: normalizeSkillList([...first.skills, label]),
+          },
+          ...rest,
+        ],
+      };
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Jobbprofiler</CardTitle>
+        <CardDescription>
+          En lins mot matchningen. Markera „har det” på kompetenser du kan stå för — det är de
+          som räknas mot annonserna.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {resume.jobProfiles.map((profile, index) => (
+          <fieldset
+            key={profile.id}
+            className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line p-3"
+          >
+            <legend className="sr-only">Profil {index + 1}</legend>
+            <Field label="Namn">
+              {(props) => (
+                <Input
+                  {...props}
+                  value={profile.label}
+                  onChange={(event) => updateProfile(profile.id, { label: event.target.value })}
+                />
+              )}
+            </Field>
+            <ul className="flex flex-col gap-1.5">
+              {profile.skills.length === 0 ? (
+                <li className="text-sm text-muted">Inga kompetenser i profilen ännu.</li>
+              ) : (
+                profile.skills.map((skill) => {
+                  const confirmed = profile.confirmed.some(
+                    (item) => item.toLowerCase() === skill.toLowerCase(),
+                  );
+                  return (
+                    <li key={skill}>
+                      <div className="flex items-center gap-2 text-sm text-ink">
+                        <Checkbox
+                          checked={confirmed}
+                          onCheckedChange={(value) =>
+                            updateProfile(profile.id, {
+                              confirmed:
+                                value === true
+                                  ? normalizeSkillList([...profile.confirmed, skill])
+                                  : profile.confirmed.filter(
+                                      (item) => item.toLowerCase() !== skill.toLowerCase(),
+                                    ),
+                            })
+                          }
+                        />
+                        <span>{skill}</span>
+                        <span className="text-[12px] text-subtle">
+                          {confirmed ? 'har det' : 'osäker'}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                setResume({
+                  ...resume,
+                  jobProfiles: resume.jobProfiles.filter((item) => item.id !== profile.id),
+                })
+              }
+            >
+              <Trash2 aria-hidden />
+              Ta bort profilen
+            </Button>
+          </fieldset>
+        ))}
+
+        {resume.jobProfiles.length < 10 ? (
+          <Button
+            variant="secondary"
+            className="self-start"
+            onClick={() =>
+              setResume({
+                ...resume,
+                jobProfiles: [
+                  ...resume.jobProfiles,
+                  {
+                    id: newId(),
+                    label: resume.headline || `Profil ${resume.jobProfiles.length + 1}`,
+                    skills: [...resume.skills],
+                    confirmed: [],
+                  },
+                ],
+              })
+            }
+          >
+            <Plus aria-hidden />
+            Lägg till profil
+          </Button>
+        ) : null}
+
+        {suggestions.length > 0 ? (
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Föreslagna från erfarenhet</h3>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {suggestions.slice(0, 12).map((item) => (
+                <li
+                  key={item.label}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span>
+                    {item.label}
+                    <span className="ml-2 text-[12px] text-subtle">{item.source}</span>
+                  </span>
+                  <Button size="sm" variant="ghost" onClick={() => addSuggested(item.label)}>
+                    Lägg till
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

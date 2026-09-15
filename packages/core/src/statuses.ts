@@ -112,6 +112,55 @@ export function isStatus(value: unknown): value is Status {
   return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);
 }
 
+export function isStage(value: unknown): value is Stage {
+  return typeof value === 'string' && (STAGES as readonly string[]).includes(value);
+}
+
+/**
+ * How far along the pipeline each stage is.
+ *
+ * "avslutad" sits below everything: closing a row says how it ended, not how
+ * far it got, so a rejection must not erase an interview.
+ */
+const STAGE_RANK: Readonly<Record<Stage, number>> = {
+  avslutad: -1,
+  bevakad: 0,
+  sokt: 1,
+  kontakt: 2,
+  intervju: 3,
+  erbjudande: 4,
+};
+
+/** The furthest stage a row has reached — a closed row keeps how far it got. */
+export function furthestStage(previous: string, next: string): Stage {
+  const prev = isStage(previous) ? previous : 'sokt';
+  const nxt = isStage(next) ? next : 'sokt';
+  return (STAGE_RANK[nxt] ?? 0) > (STAGE_RANK[prev] ?? 0) ? nxt : prev;
+}
+
+/**
+ * Where a brand-new row starts on the pipeline. A row created as already
+ * rejected still counts as applied for — that is how it came to be rejected.
+ */
+export function initialFurthestStage(status: Status): Stage {
+  const stage = stageForStatus(status);
+  return stage === 'avslutad' ? 'sokt' : stage;
+}
+
+/** Employer actually replied — including rejection. Not silence or a withdrawal. */
+export const GOT_REPLY_STATUSES: readonly Status[] = [
+  'screening',
+  'interview',
+  'forwarded',
+  'offer',
+  'accepted',
+  'rejected',
+];
+
+export function gotReply(status: Status): boolean {
+  return GOT_REPLY_STATUSES.includes(status);
+}
+
 export function stageForStatus(status: Status): Stage {
   return STATUS_PROJECTION[status].stage;
 }

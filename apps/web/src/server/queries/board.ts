@@ -3,7 +3,7 @@ import {
   type AppliedLane,
   appliedLaneFor,
   buildSummary,
-  employerKey,
+  findSimilarRows,
   type IsoDate,
   isFollowUpOverdue,
   isOverdue,
@@ -228,29 +228,31 @@ export async function dashboard(userId: string, today: IsoDate = todayIso()) {
   return buildSummary({ rows, furthestStageById, today });
 }
 
-/** Rows that look like a duplicate of one already tracked, by employer and title. */
-export async function similarApplications(userId: string, company: string, title: string) {
-  // The stored key already has company forms stripped, so "Acme AB" finds
-  // "Acme Aktiebolag".
-  const key = employerKey(company);
-  if (!key) return [];
-  return db()
+/** Rows that look like a duplicate of one already tracked. Notice, never a block. */
+export async function similarApplications(
+  userId: string,
+  query: { company: string; title: string; sourceJobId?: string; excludeId?: string },
+) {
+  const rows = await db()
     .select({
       id: schema.applications.id,
       company: schema.applications.company,
       title: schema.applications.title,
       status: schema.applications.status,
       appliedAt: schema.applications.appliedAt,
+      sourceJobId: schema.applications.sourceJobId,
+      employerKey: schema.applications.employerKey,
     })
     .from(schema.applications)
-    .where(
-      and(
-        eq(schema.applications.userId, userId),
-        eq(schema.applications.employerKey, key),
-        ilike(schema.applications.title, `%${title.trim()}%`),
-      ),
-    )
-    .limit(5);
+    .where(and(eq(schema.applications.userId, userId), isNull(schema.applications.archivedAt)));
+
+  return findSimilarRows(rows, query).map((row) => ({
+    id: row.id,
+    company: row.company,
+    title: row.title,
+    status: row.status,
+    appliedAt: row.appliedAt,
+  }));
 }
 
 export type { RawRow };

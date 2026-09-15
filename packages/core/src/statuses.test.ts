@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   allowedNextStatuses,
+  furthestStage,
+  gotReply,
   hasApplied,
+  initialFurthestStage,
   isClosed,
   isTransitionAllowed,
   isWishlist,
@@ -76,5 +79,30 @@ describe('transitions', () => {
 
   it('lets an offer only be closed out', () => {
     expect(allowedNextStatuses('offer').every((next) => isClosed(next))).toBe(true);
+  });
+});
+
+describe('furthest stage', () => {
+  it('keeps an interview when the row is later rejected', () => {
+    expect(furthestStage('intervju', 'avslutad')).toBe('intervju');
+  });
+
+  it('advances when the new stage is further along', () => {
+    expect(furthestStage('sokt', 'intervju')).toBe('intervju');
+  });
+
+  it('treats a row created as rejected as having been applied for', () => {
+    expect(initialFurthestStage('rejected')).toBe('sokt');
+    expect(initialFurthestStage('interview')).toBe('intervju');
+  });
+});
+
+describe('got reply', () => {
+  it('counts an employer reply, including rejection', () => {
+    expect(gotReply('interview')).toBe(true);
+    expect(gotReply('rejected')).toBe(true);
+    expect(gotReply('applied')).toBe(false);
+    expect(gotReply('no_response')).toBe(false);
+    expect(gotReply('wishlist')).toBe(false);
   });
 });

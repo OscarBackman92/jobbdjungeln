@@ -16,26 +16,30 @@ export async function GET(request: Request) {
 
   try {
     const experienceParam = url.searchParams.get('erfarenhet');
-    const result = await searchJobs(user.id, {
-      q: url.searchParams.get('q') ?? '',
-      regions: url.searchParams.getAll('region'),
-      municipalities: url.searchParams.getAll('kommun'),
-      fields: url.searchParams.getAll('omrade'),
-      groups: url.searchParams.getAll('yrkesgrupp'),
-      remote: url.searchParams.get('distans') === '1',
-      sort:
-        (url.searchParams.get('sort') as
-          | 'pubdate-desc'
-          | 'relevance'
-          | 'applydate-asc'
-          | 'applydate-desc'
-          | null) ?? undefined,
-      publishedAfter: url.searchParams.get('publicerad') ?? undefined,
-      experience: experienceParam === '0' ? false : undefined,
-      employmentType: url.searchParams.getAll('anstallningstyp'),
-      offset: number('offset', 0),
-      limit: Math.min(number('limit', 25), MAX_LIMIT),
-    });
+    const result = await searchJobs(
+      user.id,
+      {
+        q: url.searchParams.get('q') ?? '',
+        regions: url.searchParams.getAll('region'),
+        municipalities: url.searchParams.getAll('kommun'),
+        fields: url.searchParams.getAll('omrade'),
+        groups: url.searchParams.getAll('yrkesgrupp'),
+        remote: url.searchParams.get('distans') === '1',
+        sort:
+          (url.searchParams.get('sort') as
+            | 'pubdate-desc'
+            | 'relevance'
+            | 'applydate-asc'
+            | 'applydate-desc'
+            | null) ?? undefined,
+        publishedAfter: url.searchParams.get('publicerad') ?? undefined,
+        experience: experienceParam === '0' ? false : undefined,
+        employmentType: url.searchParams.getAll('anstallningstyp'),
+        offset: number('offset', 0),
+        limit: Math.min(number('limit', 25), MAX_LIMIT),
+      },
+      { withMatch: url.searchParams.get('cv') !== '0' },
+    );
 
     return NextResponse.json(result, {
       // The results are user-specific (tracked flags, CV match), so they are

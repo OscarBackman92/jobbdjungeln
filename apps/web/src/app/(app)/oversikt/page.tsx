@@ -18,6 +18,7 @@ import {
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageHeader } from '@/components/app/page-header';
+import { SkillInsightsCard } from '@/components/app/skill-insights';
 import { StatTile } from '@/components/app/stat-tile';
 import { Funnel } from '@/components/charts/funnel';
 import { MonthlyChart } from '@/components/charts/monthly';
@@ -32,6 +33,7 @@ import {
 } from '@/components/ui';
 import { requireUser } from '@/lib/session';
 import { dashboard } from '@/server/queries/board';
+import { skillInsights } from '@/server/queries/insights';
 
 export const metadata: Metadata = { title: 'Översikt' };
 
@@ -58,7 +60,7 @@ function savedHint(lanes: {
 
 export default async function OverviewPage() {
   const user = await requireUser();
-  const summary = await dashboard(user.id);
+  const [summary, insights] = await Promise.all([dashboard(user.id), skillInsights(user.id)]);
   const nothingYet = summary.saved === 0 && summary.active === 0 && summary.closed === 0;
   const paceLabel = summary.pace.toFixed(1).replace('.', ',');
 
@@ -222,6 +224,8 @@ export default async function OverviewPage() {
               </CardContent>
             </Card>
           </div>
+
+          <SkillInsightsCard insights={insights} />
 
           <section aria-label="Fördelning" className="grid gap-4 lg:grid-cols-2">
             <Card>

@@ -55,6 +55,12 @@ describe('users', () => {
     await expect(makeUser('anna@example.test')).rejects.toThrow();
   });
 
+  it('defaults weekly summary to opt-in false', async () => {
+    const user = await makeUser();
+    expect(user.weeklySummaryOptIn).toBe(false);
+    expect(user.reminderOptIn).toBe(true);
+  });
+
   it('requires operator ids to be unique', async () => {
     const shared = operatorId();
     await db.insert(t.users).values({ email: 'a1@example.test', operatorId: shared });

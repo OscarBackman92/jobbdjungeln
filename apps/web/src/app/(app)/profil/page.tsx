@@ -41,6 +41,7 @@ export default async function ProfilePage({
                 skills: resume?.skills ?? [],
                 experience: resume?.experience ?? [],
                 education: resume?.education ?? [],
+                jobProfiles: resume?.jobProfiles ?? [],
               }}
             />
           }

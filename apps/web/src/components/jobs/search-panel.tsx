@@ -48,6 +48,8 @@ export interface SearchState {
   sort: SearchSort;
   publishedAfter: string;
   noExperience: boolean;
+  /** Default on. `cv=0` in the URL turns CV matching off. */
+  matchCv: boolean;
 }
 
 const EMPTY: SearchState = {
@@ -60,6 +62,7 @@ const EMPTY: SearchState = {
   sort: 'pubdate-desc',
   publishedAfter: '',
   noExperience: false,
+  matchCv: true,
 };
 
 const PAGE_SIZE = 20;
@@ -95,6 +98,7 @@ function stateFromParams(params: URLSearchParams): SearchState {
     sort: validSort,
     publishedAfter: params.get('publicerad') ?? '',
     noExperience: params.get('erfarenhet') === '0',
+    matchCv: params.get('cv') !== '0',
   };
 }
 
@@ -114,6 +118,7 @@ function toUrlParams(state: SearchState): URLSearchParams {
   if (state.sort && state.sort !== 'pubdate-desc') params.set('sort', state.sort);
   if (state.publishedAfter) params.set('publicerad', state.publishedAfter);
   if (state.noExperience) params.set('erfarenhet', '0');
+  if (!state.matchCv) params.set('cv', '0');
   return params;
 }
 
@@ -165,6 +170,7 @@ export function SearchPanel({
     occupationFields: string[];
     occupationGroups: string[];
     remote: boolean;
+    matchCv: boolean;
   }>;
 }) {
   const router = useRouter();
@@ -172,6 +178,7 @@ export function SearchPanel({
   const searchParams = useSearchParams();
   const remoteId = useId();
   const experienceId = useId();
+  const matchCvId = useId();
 
   const initial = useMemo(() => stateFromParams(searchParams), [searchParams]);
   const [draft, setDraft] = useState<SearchState>(initial);
@@ -442,6 +449,17 @@ export function SearchPanel({
               />
               <Label htmlFor={experienceId} className="font-normal">
                 Utan krav på erfarenhet
+              </Label>
+            </span>
+
+            <span className="flex items-center gap-2">
+              <Checkbox
+                id={matchCvId}
+                checked={draft.matchCv}
+                onCheckedChange={(value) => setDraft({ ...draft, matchCv: value === true })}
+              />
+              <Label htmlFor={matchCvId} className="font-normal">
+                Matcha mot CV
               </Label>
             </span>
 

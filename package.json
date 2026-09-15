@@ -18,6 +18,8 @@
     "db:generate": "pnpm --filter @jobbdjungeln/db generate",
     "db:migrate": "pnpm --filter @jobbdjungeln/db migrate",
     "db:studio": "pnpm --filter @jobbdjungeln/db studio",
+    "db:import-django": "pnpm --filter @jobbdjungeln/db import:django",
+    "db:import-django:dry": "pnpm --filter @jobbdjungeln/db import:django:dry",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {

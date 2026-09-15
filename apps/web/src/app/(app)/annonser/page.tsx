@@ -20,6 +20,7 @@ export default async function JobsPage() {
     occupationFields: search.occupationFields,
     occupationGroups: search.occupationGroups,
     remote: search.remote,
+    matchCv: search.matchCv,
   }));
 
   return (

@@ -101,6 +101,58 @@ export async function saveResumeAction(input: unknown): Promise<ActionResult<voi
 
   revalidatePath('/profil');
   revalidatePath('/annonser');
+  revalidatePath('/oversikt');
+  return ok();
+}
+
+/** Append a term to the flat skill list and the first profile's confirmed set. */
+export async function addSkillToResumeAction(term: string): Promise<ActionResult<void>> {
+  const user = await requireUser();
+  const label = normalizeSkillList([term])[0];
+  if (!label) return fail('Ange en kompetens.');
+
+  const resume = await db().query.resumes.findFirst({
+    where: eq(schema.resumes.userId, user.id),
+  });
+  const skills = normalizeSkillList([...(resume?.skills ?? []), label]);
+  const existingProfiles = resume?.jobProfiles ?? [];
+  const jobProfiles =
+    existingProfiles.length > 0
+      ? existingProfiles.map((profile, index) =>
+          index === 0
+            ? {
+                ...profile,
+                skills: normalizeSkillList([...profile.skills, label]),
+                confirmed: normalizeSkillList([...profile.confirmed, label]),
+              }
+            : profile,
+        )
+      : [
+          {
+            id: entryId(),
+            label: resume?.headline || 'Mitt jobbsök',
+            skills: [label],
+            confirmed: [label],
+          },
+        ];
+
+  const values = {
+    headline: resume?.headline ?? '',
+    summary: resume?.summary ?? '',
+    skills,
+    experience: resume?.experience ?? [],
+    education: resume?.education ?? [],
+    jobProfiles,
+  };
+
+  await db()
+    .insert(schema.resumes)
+    .values({ userId: user.id, ...values })
+    .onConflictDoUpdate({ target: schema.resumes.userId, set: values });
+
+  revalidatePath('/profil');
+  revalidatePath('/annonser');
+  revalidatePath('/oversikt');
   return ok();
 }
 

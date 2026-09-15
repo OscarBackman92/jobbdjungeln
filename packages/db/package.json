@@ -14,7 +14,10 @@
     "push": "drizzle-kit push",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "import:django": "node --experimental-strip-types ./scripts/import-django.ts",
+    "import:django:dry": "node --experimental-strip-types ./scripts/import-django.ts --dry-run",
+    "import:django:rehearse": "node --experimental-strip-types ./scripts/rehearse-import.ts"
   },
   "dependencies": {
     "@jobbdjungeln/core": "workspace:*",

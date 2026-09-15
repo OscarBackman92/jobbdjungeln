@@ -2,8 +2,12 @@ import 'server-only';
 import {
   deriveApplyBy,
   employerKey,
+  furthestStage,
   type IsoDate,
+  initialFurthestStage,
   isClosed,
+  MATCH_VERSION,
+  type MatchSnapshot,
   normalizeAdUrl,
   outcomeForStatus,
   type Status,
@@ -22,36 +26,7 @@ import { db } from '@/lib/db';
  * caller. There is no code path that reads or writes a row without it.
  */
 
-/**
- * How far along the pipeline each stage is.
- *
- * "avslutad" is deliberately below everything: closing a row says how it ended,
- * not how far it got, and a rejection must not erase the fact that the person
- * reached an interview.
- */
-const STAGE_RANK: Readonly<Record<string, number>> = {
-  avslutad: -1,
-  bevakad: 0,
-  sokt: 1,
-  kontakt: 2,
-  intervju: 3,
-  erbjudande: 4,
-};
-
-/** The furthest stage a row has reached — a closed row keeps how far it got. */
-export function furthestStage(previous: string, next: string): string {
-  return (STAGE_RANK[next] ?? 0) > (STAGE_RANK[previous] ?? 0) ? next : previous;
-}
-
-/**
- * Where a brand-new row starts on the pipeline. A row created as already
- * rejected still counts as applied for — that is how it came to be rejected.
- */
-export function initialFurthestStage(status: Status): ReturnType<typeof stageForStatus> {
-  const stage = stageForStatus(status);
-  if (stage === 'avslutad') return 'sokt';
-  return stage;
-}
+export { furthestStage, initialFurthestStage };
 
 /** Columns derived from `status`, recomputed on every write so they cannot drift. */
 export function derivedColumns(
@@ -99,6 +74,10 @@ export interface CreateApplicationInput {
   workingHoursType?: string;
   scopeOfWorkMin?: number | null;
   scopeOfWorkMax?: number | null;
+  matchScore?: number | null;
+  matchSnapshot?: MatchSnapshot | null;
+  matchVersion?: number;
+  matchScoredAt?: Date | null;
 }
 
 export async function createApplication(
@@ -119,8 +98,7 @@ export async function createApplication(
     createdAt: today,
   });
   const applyBy = input.applyBy ?? applyDerived?.applyBy ?? null;
-  const applyByIsAuto =
-    input.applyBy != null ? false : (applyDerived?.isAuto ?? false);
+  const applyByIsAuto = input.applyBy != null ? false : (applyDerived?.isAuto ?? false);
   const appliedAt =
     input.appliedAt ?? (stageForStatus(input.status) === 'bevakad' ? null : today);
 
@@ -155,6 +133,14 @@ export async function createApplication(
       workingHoursType: input.workingHoursType ?? '',
       scopeOfWorkMin: input.scopeOfWorkMin ?? null,
       scopeOfWorkMax: input.scopeOfWorkMax ?? null,
+      ...(input.matchSnapshot
+        ? {
+            matchScore: input.matchScore ?? null,
+            matchSnapshot: input.matchSnapshot,
+            matchVersion: input.matchVersion ?? MATCH_VERSION,
+            matchScoredAt: input.matchScoredAt ?? new Date(),
+          }
+        : {}),
     })
     .returning();
 
@@ -235,9 +221,7 @@ export async function trackedAdUrls(userId: string): Promise<string[]> {
 }
 
 /** Ad URL keys mapped to application ids, for save/unsave toggles. */
-export async function trackedAds(
-  userId: string,
-): Promise<Array<{ key: string; id: string }>> {
+export async function trackedAds(userId: string): Promise<Array<{ key: string; id: string }>> {
   return db()
     .select({ key: schema.applications.adUrlKey, id: schema.applications.id })
     .from(schema.applications)

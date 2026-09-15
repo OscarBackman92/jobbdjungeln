@@ -1,8 +1,8 @@
 'use client';
 
 import {
-  addMonths,
   APPLICATION_SOURCES,
+  addMonths,
   isValidSalaryClaim,
   SALARY_CLAIM_NONE,
   SOURCE_LABELS,
@@ -12,7 +12,7 @@ import {
 } from '@jobbdjungeln/core';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
   Button,
@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui';
-import { createApplicationAction } from '@/server/actions/applications';
+import { createApplicationAction, findSimilarAction } from '@/server/actions/applications';
 
 const DATE_MIN = addMonths(todayIso(), -24);
 const DATE_MAX = addMonths(todayIso(), 24);
@@ -56,8 +56,36 @@ export function NewApplicationButton({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [company, setCompany] = useState('');
+  const [title, setTitle] = useState('');
+  const [similar, setSimilar] = useState<
+    Array<{ id: string; company: string; title: string; appliedAt: string | null }>
+  >([]);
 
   const needsSalary = stageForStatus(defaultStatus) !== 'bevakad';
+
+  useEffect(() => {
+    if (!open) {
+      setCompany('');
+      setTitle('');
+      setSimilar([]);
+      setError(undefined);
+      setFieldErrors({});
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || (!company.trim() && !title.trim())) {
+      setSimilar([]);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      void findSimilarAction({ company, title }).then((result) => {
+        if (result.ok) setSimilar(result.data);
+      });
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [open, company, title]);
 
   function submit(formData: FormData) {
     setError(undefined);
@@ -127,11 +155,36 @@ export function NewApplicationButton({
             ) : null}
 
             <Field label="Arbetsgivare" required error={fieldErrors.company}>
-              {(props) => <Input {...props} name="company" autoFocus required />}
+              {(props) => (
+                <Input
+                  {...props}
+                  name="company"
+                  autoFocus
+                  required
+                  value={company}
+                  onChange={(event) => setCompany(event.target.value)}
+                />
+              )}
             </Field>
             <Field label="Roll" required error={fieldErrors.title}>
-              {(props) => <Input {...props} name="title" required />}
+              {(props) => (
+                <Input
+                  {...props}
+                  name="title"
+                  required
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              )}
             </Field>
+            {similar.length > 0 ? (
+              <p className="sm:col-span-2 rounded-[var(--radius-control)] border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
+                Du har redan {similar[0]?.company.toUpperCase()}
+                {similar[0]?.appliedAt ? ` ${similar[0].appliedAt}` : ''}: {similar[0]?.title}.
+                Du kan spara ändå om det är en annan tjänst.
+              </p>
+            ) : null}
+
             <Field label="Ort">{(props) => <Input {...props} name="location" />}</Field>
             <Field label="Hittad via">
               {(props) => (

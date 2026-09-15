@@ -23,6 +23,8 @@ import {
   derivedColumns,
   getApplication,
 } from '@/server/applications';
+import { scoreForUser } from '@/server/match';
+import { similarApplications } from '@/server/queries/board';
 import { type ActionResult, fail, fromZod, ok } from './result.ts';
 import {
   addEventSchema,
@@ -105,7 +107,11 @@ export async function createApplicationAction(
     }
   }
 
-  const row = await createApplication(user.id, values);
+  const match = await scoreForUser(user.id, {
+    title: values.title,
+    adDescription: values.adDescription,
+  });
+  const row = await createApplication(user.id, { ...values, ...(match ?? {}) });
   if (!row) return fail('Kunde inte spara raden.');
 
   if (stageForStatus(values.status) !== 'bevakad') {
@@ -335,4 +341,33 @@ export async function bulkAction(input: unknown): Promise<ActionResult<{ affecte
 
   revalidateBoards();
   return ok({ affected: rows.length });
+}
+
+export async function findSimilarAction(input: {
+  company: string;
+  title: string;
+  sourceJobId?: string;
+  excludeId?: string;
+}): Promise<
+  ActionResult<
+    Array<{
+      id: string;
+      company: string;
+      title: string;
+      status: string;
+      appliedAt: string | null;
+    }>
+  >
+> {
+  const user = await requireUser();
+  const company = input.company.trim();
+  const title = input.title.trim();
+  if (!company && !input.sourceJobId) return ok([]);
+  const rows = await similarApplications(user.id, {
+    company,
+    title,
+    sourceJobId: input.sourceJobId,
+    excludeId: input.excludeId,
+  });
+  return ok(rows);
 }

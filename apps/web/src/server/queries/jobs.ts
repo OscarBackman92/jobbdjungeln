@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   type MatchSnapshot,
+  matchingTermsFromResume,
   normalizeAdUrl,
   scorePosting,
   trimSnapshot,
@@ -46,7 +47,7 @@ export async function searchJobs(
   ]);
 
   const trackedByKey = new Map(tracked.map((row) => [row.key, row.id]));
-  const skills = resume?.skills ?? [];
+  const skills = resume ? matchingTermsFromResume(resume) : [];
   const hasResume = skills.length > 0;
 
   return {
@@ -60,7 +61,9 @@ export async function searchJobs(
         trackedApplicationId,
         match:
           withMatch && hasResume
-            ? trimSnapshot(scorePosting(skills, { title: ad.title, description: ad.description }))
+            ? trimSnapshot(
+                scorePosting(skills, { title: ad.title, description: ad.description }),
+              )
             : null,
       };
     }),

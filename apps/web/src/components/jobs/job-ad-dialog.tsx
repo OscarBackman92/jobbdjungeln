@@ -20,6 +20,7 @@ import {
 import {
   createApplicationAction,
   deleteApplicationAction,
+  findSimilarAction,
 } from '@/server/actions/applications';
 
 function applyHref(job: JobHit): string {
@@ -64,6 +65,14 @@ export function JobAdDialog({
     }
 
     startTransition(async () => {
+      const similar = await findSimilarAction({
+        company: job.companyName,
+        title: job.title,
+        sourceJobId: job.id,
+      });
+      if (similar.ok && similar.data.length > 0) {
+        toast.message(`Du har redan ${similar.data[0]?.company}: ${similar.data[0]?.title}.`);
+      }
       const result = await createApplicationAction({
         company: job.companyName,
         title: job.title,
