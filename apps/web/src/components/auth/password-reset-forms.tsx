@@ -22,10 +22,16 @@ export function ForgotPasswordForm() {
 
   async function submit(formData: FormData) {
     setPending(true);
-    await requestPasswordReset({
+    // Always show the success copy to the user (no account enumeration), but
+    // keep transport errors in the console so a broken origin/mail setup is
+    // visible during cutover rather than looking like a silent inbox miss.
+    const { error } = await requestPasswordReset({
       email: String(formData.get('email') ?? ''),
       redirectTo: '/nytt-losenord',
     });
+    if (error) {
+      console.error('[auth] requestPasswordReset failed', error);
+    }
     setPending(false);
     setSent(true);
   }

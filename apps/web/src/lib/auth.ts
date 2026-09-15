@@ -47,6 +47,10 @@ function auth() {
           fallback: config.APP_URL,
         }
       : config.APP_URL,
+    // Explicit origins: object-form allowedHosts should fold into this, but after
+    // the custom-domain cutover production returned "Invalid origin" for
+    // APP_URL itself — so keep both until that path is trustworthy.
+    trustedOrigins: [config.APP_URL, 'https://*.vercel.app'],
     secret: config.AUTH_SECRET,
 
     // `usePlural` maps better-auth's singular model names onto the plural table
