@@ -181,6 +181,51 @@ export function formatRelativeDays(
   return `${Math.abs(delta)} dagar sedan`;
 }
 
+export type DeadlineUrgency = 'danger' | 'warning' | 'warning-soft' | 'muted' | 'neutral';
+
+export interface DeadlineDisplay {
+  label: string;
+  /** Absolute date for tooltips. */
+  absolute: string;
+  urgency: DeadlineUrgency;
+}
+
+/** Relative application deadline for job cards and dialogs. */
+export function formatDeadlineDisplay(
+  value: IsoDate | null | undefined,
+  reference: IsoDate = today(),
+): DeadlineDisplay | null {
+  if (!value || !isIsoDate(value)) return null;
+  const delta = daysBetween(reference, value);
+  const absolute = formatShortDate(value, reference);
+  if (delta < 0) {
+    return { label: 'Sista dagen har passerat', absolute, urgency: 'muted' };
+  }
+  if (delta === 0) {
+    return { label: 'Sista dag idag', absolute, urgency: 'danger' };
+  }
+  if (delta === 1) {
+    return { label: 'Sista dag imorgon', absolute, urgency: 'warning' };
+  }
+  if (delta <= 7) {
+    return { label: `Sista dag om ${delta} dagar`, absolute, urgency: 'warning-soft' };
+  }
+  return { label: `Sista dag ${absolute}`, absolute, urgency: 'neutral' };
+}
+
+/** Relative publication label for the job card meta row. */
+export function formatPublishedDisplay(
+  value: IsoDate | null | undefined,
+  reference: IsoDate = today(),
+): string {
+  if (!value || !isIsoDate(value)) return '';
+  const ago = daysBetween(value, reference);
+  if (ago === 0) return 'Publicerad idag';
+  if (ago === 1) return 'Publicerad igår';
+  if (ago > 1) return `Publicerad för ${ago} dagar sedan`;
+  return `Publicerad ${formatShortDate(value, reference)}`;
+}
+
 /** Inclusive first/last calendar day of a month. */
 export function monthBounds(year: number, month: number): { start: IsoDate; end: IsoDate } {
   return {
