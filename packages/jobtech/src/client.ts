@@ -11,6 +11,8 @@
 import {
   jobTechHitSchema,
   jobTechSearchResponseSchema,
+  jobTechStatBucketSchema,
+  jobTechStatValueSchema,
   taxonomyConceptSchema,
   taxonomyResponseSchema,
 } from './schemas.ts';
@@ -60,6 +62,21 @@ export const SEARCH_SORTS = [
 ] as const;
 export type SearchSort = (typeof SEARCH_SORTS)[number];
 
+/** Aggregation dimensions JobTech accepts on `/search` via `stats=…`. */
+export const SEARCH_STATS = ['municipality', 'occupation-group'] as const;
+export type SearchStatType = (typeof SEARCH_STATS)[number];
+
+export interface SearchStatValue {
+  conceptId: string;
+  label: string;
+  count: number;
+}
+
+export interface SearchStatBucket {
+  type: SearchStatType;
+  values: SearchStatValue[];
+}
+
 export interface SearchParams {
   q?: string;
   regions?: readonly string[];
@@ -78,6 +95,10 @@ export interface SearchParams {
   experience?: boolean;
   /** Employment-type taxonomy concept ids. */
   employmentType?: readonly string[];
+  /** Request facet buckets for the full result set (often with `limit: 0`). */
+  stats?: readonly SearchStatType[];
+  /** Max values per stats dimension — JobTech `stats.limit`. */
+  statsLimit?: number;
   offset?: number;
   limit?: number;
 }
@@ -85,6 +106,7 @@ export interface SearchParams {
 export interface SearchResult {
   total: number;
   results: JobAd[];
+  stats?: SearchStatBucket[];
 }
 
 /** Thrown when JobTech is unreachable or answers with an error. */
@@ -186,6 +208,34 @@ export function hitToJobAd(raw: unknown): JobAd | null {
   };
 }
 
+/** Normalize JobTech `stats` buckets into the app shape. */
+export function parseSearchStats(raw: unknown): SearchStatBucket[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SearchStatBucket[] = [];
+
+  for (const item of raw) {
+    const bucket = jobTechStatBucketSchema.safeParse(item);
+    if (!bucket.success) continue;
+    const type = bucket.data.type;
+    if (!(SEARCH_STATS as readonly string[]).includes(type ?? '')) continue;
+
+    const values: SearchStatValue[] = [];
+    for (const valueRaw of bucket.data.values ?? []) {
+      const value = jobTechStatValueSchema.safeParse(valueRaw);
+      if (!value.success) continue;
+      const conceptId = (value.data.concept_id ?? '').trim();
+      const label = (value.data.term ?? '').trim();
+      const count = boundedInt(value.data.count) ?? 0;
+      if (!conceptId || !label || count <= 0) continue;
+      values.push({ conceptId, label, count });
+    }
+    if (values.length === 0) continue;
+    out.push({ type: type as SearchStatType, values });
+  }
+
+  return out;
+}
+
 export function createJobTechClient(options: JobTechClientOptions = {}) {
   const config = { ...DEFAULTS, ...options };
   const doFetch = options.fetch ?? globalThis.fetch;
@@ -278,6 +328,15 @@ export function createJobTechClient(options: JobTechClientOptions = {}) {
         query.append('employment-type', id);
       }
 
+      const stats = (params.stats ?? []).filter((type): type is SearchStatType =>
+        (SEARCH_STATS as readonly string[]).includes(type),
+      );
+      for (const type of stats) query.append('stats', type);
+      if (stats.length) {
+        const statsLimit = Math.min(Math.max(1, params.statsLimit ?? 5), 20);
+        query.set('stats.limit', String(statsLimit));
+      }
+
       const payload = await getJson(`${config.searchUrl}?${query}`);
       const parsed = jobTechSearchResponseSchema.safeParse(payload);
       if (!parsed.success) {
@@ -289,6 +348,7 @@ export function createJobTechClient(options: JobTechClientOptions = {}) {
         results: (parsed.data.hits ?? [])
           .map(hitToJobAd)
           .filter((ad): ad is JobAd => ad !== null),
+        stats: stats.length ? parseSearchStats(parsed.data.stats) : undefined,
       };
     },
 

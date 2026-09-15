@@ -1,7 +1,11 @@
 'use client';
 
 import { pluralWord } from '@jobbdjungeln/core';
-import { regionLabel } from '@jobbdjungeln/jobtech';
+import {
+  regionLabel,
+  type SearchStatBucket,
+  type SearchStatValue,
+} from '@jobbdjungeln/jobtech';
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -21,7 +25,7 @@ import { buildSearchRelaxations } from '@/components/jobs/empty-search-suggestio
 import { JobCard, type JobHit } from '@/components/jobs/job-card';
 import { MultiSelectCombobox } from '@/components/jobs/multi-select-combobox';
 import { SavedSearches } from '@/components/jobs/saved-searches';
-import { SearchInsight } from '@/components/jobs/search-insight';
+import { type InsightFilterKind, SearchInsight } from '@/components/jobs/search-insight';
 import {
   EMPTY_SEARCH,
   formatSwedishList,
@@ -145,6 +149,19 @@ function toCountParams(state: SearchState): string {
   return params.toString();
 }
 
+/** Full-result JobTech facets for the insight panel. */
+function toStatsParams(state: SearchState): string {
+  const params = toUrlParams(state);
+  params.set('sort', toJobTechSort(state.sort));
+  params.set('offset', '0');
+  params.set('limit', '0');
+  params.set('cv', '0');
+  params.append('stats', 'municipality');
+  params.append('stats', 'occupation-group');
+  params.set('stats.limit', '5');
+  return params.toString();
+}
+
 function isFiltered(state: SearchState): boolean {
   return Boolean(
     state.q ||
@@ -156,14 +173,6 @@ function isFiltered(state: SearchState): boolean {
       state.publishedAfter ||
       state.noExperience,
   );
-}
-
-function todayLocal(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
 }
 
 interface RegionDropNotice {
@@ -227,6 +236,10 @@ export function SearchPanel({
   );
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
   const [pendingResultsFocus, setPendingResultsFocus] = useState(false);
+  const [insightLabels, setInsightLabels] = useState<{
+    municipalities: Map<string, string>;
+    groups: Map<string, string>;
+  }>(() => ({ municipalities: new Map(), groups: new Map() }));
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
   const flashPreviousRef = useRef<number | null>(null);
 
@@ -303,6 +316,38 @@ export function SearchPanel({
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Kunde inte räkna annonser.');
       return (payload as { total: number }).total;
+    },
+  });
+
+  const {
+    data: insightStats,
+    isFetching: insightStatsFetching,
+    isPending: insightStatsPending,
+  } = useQuery({
+    queryKey: [
+      'jobs-stats',
+      {
+        q: applied.q,
+        regions: applied.regions,
+        municipalities: applied.municipalities,
+        fields: applied.fields,
+        groups: applied.groups,
+        remote: applied.remote,
+        publishedAfter: applied.publishedAfter,
+        noExperience: applied.noExperience,
+      },
+    ],
+    enabled: urlReady,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/jobs?${toStatsParams(applied)}`, { signal });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Kunde inte hämta statistik.');
+      return payload as {
+        total: number;
+        stats?: SearchStatBucket[];
+      };
     },
   });
 
@@ -434,6 +479,30 @@ export function SearchPanel({
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
+  function addInsightFilter(kind: InsightFilterKind, value: SearchStatValue) {
+    setInsightLabels((current) => {
+      const next = {
+        municipalities: new Map(current.municipalities),
+        groups: new Map(current.groups),
+      };
+      if (kind === 'municipality') next.municipalities.set(value.conceptId, value.label);
+      else next.groups.set(value.conceptId, value.label);
+      return next;
+    });
+
+    if (kind === 'municipality') {
+      if (applied.municipalities.includes(value.conceptId)) return;
+      apply(
+        { ...applied, municipalities: [...applied.municipalities, value.conceptId] },
+        { confirm: true },
+      );
+      return;
+    }
+
+    if (applied.groups.includes(value.conceptId)) return;
+    apply({ ...applied, groups: [...applied.groups, value.conceptId] }, { confirm: true });
+  }
+
   function resetDraftToApplied() {
     setDraft(applied);
     setDebouncedDraft(applied);
@@ -535,14 +604,20 @@ export function SearchPanel({
     const municipalities = new Map(
       municipalityOptions.map((item) => [item.id, item.label] as const),
     );
+    for (const [id, label] of insightLabels.municipalities) {
+      if (!municipalities.has(id)) municipalities.set(id, label);
+    }
     const groups = new Map(groupOptions.map((item) => [item.id, item.label] as const));
+    for (const [id, label] of insightLabels.groups) {
+      if (!groups.has(id)) groups.set(id, label);
+    }
     const groupFields = new Map(
       groupOptions
         .filter((item): item is TaxonomyOption & { fieldId: string } => Boolean(item.fieldId))
         .map((item) => [item.id, item.fieldId] as const),
     );
     return { municipalities, groups, groupFields };
-  }, [municipalityOptions, groupOptions]);
+  }, [municipalityOptions, groupOptions, insightLabels]);
 
   const activeChips = useMemo(
     () => buildActiveFilterChips(applied, chipLabelMaps),
@@ -939,6 +1014,17 @@ export function SearchPanel({
             <p className="text-[12px] text-subtle">Sorterat bland de 100 nyaste träffarna</p>
           ) : null}
 
+          {hits.length > 0 || (isFetched && total > 0) ? (
+            <SearchInsight
+              total={insightStats?.total ?? total}
+              stats={insightStats?.stats}
+              municipalities={applied.municipalities}
+              groups={applied.groups}
+              loading={insightStatsPending || insightStatsFetching}
+              onAddFilter={addInsightFilter}
+            />
+          ) : null}
+
           {hits.length === 0 ? (
             qOnlyZero ? (
               <EmptyState
@@ -988,8 +1074,6 @@ export function SearchPanel({
             )
           ) : (
             <>
-              <SearchInsight jobs={hits} today={todayLocal()} />
-
               <ul
                 className={`flex flex-col gap-3 transition-opacity ${showStaleResults ? 'opacity-50' : 'opacity-100'}`}
                 aria-busy={showStaleResults || undefined}

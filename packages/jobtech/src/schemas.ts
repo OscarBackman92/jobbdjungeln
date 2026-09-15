@@ -59,10 +59,26 @@ export const jobTechHitSchema = z
 
 export type JobTechHit = z.infer<typeof jobTechHitSchema>;
 
+export const jobTechStatValueSchema = z
+  .object({
+    term: z.string().nullish(),
+    concept_id: z.string().nullish(),
+    count: z.number().nullish(),
+  })
+  .loose();
+
+export const jobTechStatBucketSchema = z
+  .object({
+    type: z.string().nullish(),
+    values: z.array(z.unknown()).nullish(),
+  })
+  .loose();
+
 export const jobTechSearchResponseSchema = z
   .object({
     total: z.object({ value: z.number().nullish() }).loose().nullish(),
     hits: z.array(z.unknown()).nullish(),
+    stats: z.array(z.unknown()).nullish(),
   })
   .loose();
 
