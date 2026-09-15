@@ -56,6 +56,7 @@ const BANDS: ReadonlyArray<{ label: string; low: number; high: number }> = [
 ];
 
 const MIN_BAND = 5;
+const MIN_GAP_COUNT = 3;
 
 function countMapIncrement(map: Map<string, number>, key: string): void {
   map.set(key, (map.get(key) ?? 0) + 1);
@@ -122,6 +123,7 @@ export function buildSkillInsights(
   const total = Math.max(scored.length, 1);
   const gapTerms = [...gapCounter.entries()]
     .sort((a, b) => b[1] - a[1])
+    .filter(([, count]) => count >= MIN_GAP_COUNT)
     .filter(([term]) => !owned.has(canonicalSkillLabel(term).toLowerCase()))
     .slice(0, 12)
     .map(([term, count]) => ({

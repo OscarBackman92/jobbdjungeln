@@ -14,9 +14,39 @@ import {
 } from '@/components/ui';
 import { addSkillToResumeAction } from '@/server/actions/resume';
 
+const INSIGHT_MIN = 10;
+
 function rateLabel(band: SkillInsights['responseByBand'][number]): string {
-  if (band.insufficientData || band.rate === null) return 'för lite data';
+  if (band.insufficientData || band.rate === null) return 'För lite data';
   return `${Math.round(band.rate * 100)} % svar`;
+}
+
+function bandInsight(bands: SkillInsights['responseByBand']): string | null {
+  const scored = bands.filter(
+    (band) => band.band !== 'ej bedömd' && band.tracked >= INSIGHT_MIN && band.rate !== null,
+  );
+  if (scored.length < 2) return null;
+  const best = [...scored].sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0))[0];
+  const worst = [...scored].sort((a, b) => (a.rate ?? 0) - (b.rate ?? 0))[0];
+  if (!best || !worst || best.band === worst.band) return null;
+  return `Du fick oftast svar på jobb med ${best.band} % match (${Math.round((best.rate ?? 0) * 100)} %), oftare än med ${worst.band} % (${Math.round((worst.rate ?? 0) * 100)} %).`;
+}
+
+function searchHrefForTerm(term: string): string {
+  const params = new URLSearchParams({ q: term });
+  try {
+    const regions = globalThis.localStorage?.getItem('jobbdjungeln-last-region');
+    const municipalities = globalThis.localStorage?.getItem('jobbdjungeln-last-municipalities');
+    if (regions) {
+      for (const id of JSON.parse(regions) as string[]) params.append('region', id);
+    }
+    if (municipalities) {
+      for (const id of JSON.parse(municipalities) as string[]) params.append('kommun', id);
+    }
+  } catch {
+    // Ignore storage errors.
+  }
+  return `/annonser?${params}`;
 }
 
 export function SkillInsightsCard({ insights }: { insights: SkillInsights }) {
@@ -25,6 +55,7 @@ export function SkillInsightsCard({ insights }: { insights: SkillInsights }) {
   const [pending, startTransition] = useTransition();
   const { scope, gapTerms, responseByBand } = insights;
   const withSnapshot = scope.withSnapshot;
+  const insight = bandInsight(responseByBand);
 
   function addTerm(term: string) {
     setPendingTerm(term);
@@ -32,7 +63,16 @@ export function SkillInsightsCard({ insights }: { insights: SkillInsights }) {
       const result = await addSkillToResumeAction(term);
       setPendingTerm(null);
       if (result.ok) {
-        toast.success(`${term} är tillagd i CV:t`);
+        toast(`${term} tillagd i kompetenser`, {
+          duration: 8000,
+          description: 'Läggs till i dina kompetenser – lägg bara till sådant du kan stå för.',
+          cancel: {
+            label: 'Ångra',
+            onClick: () => {
+              toast.message('Ta bort kompetensen under Profil om du ångrade dig.');
+            },
+          },
+        });
         router.refresh();
       } else {
         toast.error(result.error);
@@ -55,6 +95,7 @@ export function SkillInsightsCard({ insights }: { insights: SkillInsights }) {
       <CardContent className="grid gap-6 sm:grid-cols-2">
         <div>
           <h3 className="text-sm font-semibold text-ink">Svar per matchning</h3>
+          {insight ? <p className="mt-2 text-[13px] text-muted">{insight}</p> : null}
           <ul className="mt-2 flex flex-col gap-2">
             {responseByBand.map((band) => (
               <li key={band.band} className="flex items-baseline justify-between gap-3 text-sm">
@@ -74,7 +115,7 @@ export function SkillInsightsCard({ insights }: { insights: SkillInsights }) {
         <div>
           <h3 className="text-sm font-semibold text-ink">Krav du oftast saknar</h3>
           {gapTerms.length === 0 ? (
-            <p className="mt-2 text-sm text-muted">Inga gap ännu — spara fler annonser.</p>
+            <p className="mt-2 text-sm text-muted">För lite data än</p>
           ) : (
             <ul className="mt-2 flex flex-col gap-2">
               {gapTerms.slice(0, 8).map((row) => (
@@ -83,7 +124,7 @@ export function SkillInsightsCard({ insights }: { insights: SkillInsights }) {
                     <button
                       type="button"
                       className="truncate text-sm font-medium text-brand-text underline-offset-2 hover:underline"
-                      onClick={() => router.push(`/annonser?q=${encodeURIComponent(row.term)}`)}
+                      onClick={() => router.push(searchHrefForTerm(row.term))}
                     >
                       {row.term}
                     </button>
@@ -96,8 +137,9 @@ export function SkillInsightsCard({ insights }: { insights: SkillInsights }) {
                     variant="secondary"
                     disabled={pending && pendingTerm === row.term}
                     onClick={() => addTerm(row.term)}
+                    title="Läggs till i dina kompetenser – lägg bara till sådant du kan stå för."
                   >
-                    {pending && pendingTerm === row.term ? 'Lägger till…' : '+ lägg till'}
+                    {pending && pendingTerm === row.term ? 'Lägger till…' : 'Jag kan detta'}
                   </Button>
                 </li>
               ))}

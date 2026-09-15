@@ -53,6 +53,25 @@ export function BoardView({
   const archivedId = useId();
 
   const archived = params.get('arkiverade') === '1';
+  const focusLane = params.get('grupp');
+  const focusRow = params.get('rad');
+
+  useEffect(() => {
+    if (!focusLane) return;
+    setOpenLanes((current) => ({ ...current, [focusLane]: true }));
+    const timer = window.setTimeout(() => {
+      document.getElementById(`lane-${focusLane}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [focusLane]);
+
+  useEffect(() => {
+    if (!focusRow) return;
+    setOpenId(focusRow);
+  }, [focusRow]);
   const total = lanes.reduce((sum, lane) => sum + lane.rows.length, 0);
 
   useEffect(() => {
@@ -182,6 +201,7 @@ export function BoardView({
           {lanes.map((lane) => (
             <Lane
               key={lane.key}
+              id={`lane-${lane.key}`}
               title={lane.title}
               hint={lane.hint}
               count={lane.rows.length}

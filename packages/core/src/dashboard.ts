@@ -67,8 +67,10 @@ export interface NextAction {
   company: string;
   title: string;
   due: IsoDate;
-  kind: 'apply_by' | 'follow_up' | 'deadline';
+  kind: 'apply_by' | 'follow_up' | 'deadline' | 'waiting';
   overdue: boolean;
+  /** Board the row lives on. */
+  board: 'saved' | 'applied';
 }
 
 export interface DashboardSummary {
@@ -84,6 +86,8 @@ export interface DashboardSummary {
   funnel: FunnelStep[];
   monthly: MonthlyPoint[];
   nextActions: NextAction[];
+  /** Closest deadline beyond the 7-day window, when nextActions is empty. */
+  nextDeadline: { title: string; due: IsoDate; days: number } | null;
   staleCount: number;
   /** Applications per week over the last 4 weeks, rounded to one decimal. */
   pace: number;
@@ -177,46 +181,109 @@ export function buildMonthly(
 export function buildNextActions(
   rows: readonly DashboardRow[],
   today: IsoDate = todayIso(),
-): NextAction[] {
+): { actions: NextAction[]; nextDeadline: DashboardSummary['nextDeadline'] } {
   const actions: NextAction[] = [];
+  const later: Array<{ title: string; due: IsoDate; days: number }> = [];
 
   for (const row of rows) {
     if (row.archivedAt) continue;
     if (isClosed(row.status)) continue;
 
-    if (row.nextActionAt) {
+    const stage = stageForStatus(row.status);
+    const board: 'saved' | 'applied' = stage === 'bevakad' ? 'saved' : 'applied';
+
+    if (board === 'applied' && isOverdue(row, today)) {
+      const days = waitingDays(row, today) ?? 0;
       actions.push({
         id: row.id,
         company: row.company,
         title: row.title,
-        due: row.nextActionAt,
-        kind: 'follow_up',
-        overdue: isFollowUpOverdue(row, today),
+        due: today,
+        kind: 'waiting',
+        overdue: true,
+        board,
       });
-    } else if (stageForStatus(row.status) === 'bevakad') {
-      const due = row.deadline ?? (row.applyByIsAuto ? null : row.applyBy) ?? row.applyBy;
-      if (due) {
+      void days;
+    }
+
+    if (row.nextActionAt) {
+      const days = daysBetween(today, row.nextActionAt);
+      if (days <= 7) {
         actions.push({
           id: row.id,
           company: row.company,
           title: row.title,
-          due,
-          // `applyByIsAuto` defaults to "auto nudge" when omitted — only an
-          // explicit false (user-set date) or a real ad deadline is a deadline.
-          kind: row.deadline
-            ? 'deadline'
-            : row.applyByIsAuto === false
-              ? 'deadline'
-              : 'apply_by',
-          overdue: daysBetween(due, today) > 0,
+          due: row.nextActionAt,
+          kind: 'follow_up',
+          overdue: days < 0 || isFollowUpOverdue(row, today),
+          board,
         });
+      } else {
+        later.push({ title: row.title, due: row.nextActionAt, days });
+      }
+    }
+
+    if (stage === 'bevakad') {
+      const deadline = row.deadline;
+      if (deadline) {
+        const days = daysBetween(today, deadline);
+        if (days <= 7) {
+          actions.push({
+            id: row.id,
+            company: row.company,
+            title: row.title,
+            due: deadline,
+            kind: 'deadline',
+            overdue: days < 0,
+            board,
+          });
+        } else {
+          later.push({ title: row.title, due: deadline, days });
+        }
+      }
+
+      if (row.applyBy && row.applyByIsAuto === false) {
+        const days = daysBetween(today, row.applyBy);
+        if (days <= 7) {
+          actions.push({
+            id: row.id,
+            company: row.company,
+            title: row.title,
+            due: row.applyBy,
+            kind: 'apply_by',
+            overdue: days < 0,
+            board,
+          });
+        } else {
+          later.push({ title: row.title, due: row.applyBy, days });
+        }
       }
     }
   }
 
-  return actions
-    .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0))
-    .slice(0, NEXT_ACTION_LIMIT);
+  // Deduplicate by id+kind (waiting + follow_up can coexist).
+  const seen = new Set<string>();
+  const unique = actions.filter((action) => {
+    const key = `${action.id}:${action.kind}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  unique.sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    if (a.kind === 'waiting' && b.kind !== 'waiting') return -1;
+    if (b.kind === 'waiting' && a.kind !== 'waiting') return 1;
+    return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
+  });
+
+  later.sort((a, b) => a.days - b.days);
+  const nextDeadline = later[0] ?? null;
+
+  return {
+    actions: unique.slice(0, NEXT_ACTION_LIMIT),
+    nextDeadline,
+  };
 }
 
 export interface SummaryInput {
@@ -290,6 +357,8 @@ export function buildSummary({
     (row) => row.appliedAt && daysBetween(row.appliedAt, today) <= PACE_WINDOW_DAYS,
   ).length;
 
+  const { actions: nextActions, nextDeadline } = buildNextActions(live, today);
+
   return {
     saved,
     active,
@@ -307,7 +376,8 @@ export function buildSummary({
       appliedRows.map((row) => row.id),
       today,
     ),
-    nextActions: buildNextActions(live, today),
+    nextActions,
+    nextDeadline,
     staleCount,
     pace: Math.round((recentApplied / (PACE_WINDOW_DAYS / 7)) * 10) / 10,
   };

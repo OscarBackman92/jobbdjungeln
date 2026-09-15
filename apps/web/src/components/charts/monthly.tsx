@@ -26,18 +26,27 @@ function label(key: string): string {
 }
 
 function yTicks(max: number): number[] {
+  if (max <= 0) return [0];
   if (max <= 1) return [0, 1];
-  if (max <= 4) return [0, 1, 2, max];
-  const step = Math.ceil(max / 4);
-  const ticks = [0];
-  for (let value = step; value < max; value += step) ticks.push(value);
-  if (ticks[ticks.length - 1] !== max) ticks.push(max);
+  // Nice round steps so a max of 35 becomes 0, 10, 20, 30, 40 — not 0, 9, 18, 27, 35.
+  const rough = max / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const residual = rough / magnitude;
+  const niceResidual = residual <= 1 ? 1 : residual <= 2 ? 2 : residual <= 5 ? 5 : 10;
+  const step = niceResidual * magnitude;
+  const top = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let value = 0; value <= top + step / 1000; value += step) {
+    ticks.push(Math.round(value));
+  }
   return ticks;
 }
 
 export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const max = Math.max(...points.map((point) => point.applied), 1);
+  const maxValue = Math.max(...points.map((point) => point.applied), 1);
+  const ticks = yTicks(maxValue);
+  const scaleMax = ticks[ticks.length - 1] ?? maxValue;
 
   if (points.every((point) => point.applied === 0)) {
     return (
@@ -48,7 +57,6 @@ export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
   }
 
   const active = points.find((point) => point.key === hovered);
-  const ticks = yTicks(max);
 
   return (
     <div className="flex flex-col gap-3">
@@ -92,7 +100,7 @@ export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
               <span
                 key={tick}
                 className="absolute inset-x-0 border-t border-chart-grid"
-                style={{ bottom: `${(tick / max) * 100}%` }}
+                style={{ bottom: `${(tick / scaleMax) * 100}%` }}
               />
             ))}
           </div>
@@ -102,7 +110,7 @@ export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
             style={{ height: CHART_HEIGHT }}
           >
             {points.map((point) => {
-              const total = (point.applied / max) * 100;
+              const total = (point.applied / scaleMax) * 100;
               const replied =
                 point.applied === 0 ? 0 : (point.reachedContact / point.applied) * 100;
               const dim = hovered !== null && hovered !== point.key;
@@ -115,7 +123,9 @@ export function MonthlyChart({ points }: { points: readonly MonthlyPoint[] }) {
                   onPointerLeave={() => setHovered(null)}
                 >
                   {!empty ? (
-                    <span className="text-[10px] tabular-nums text-subtle">{point.applied}</span>
+                    <span className="text-[10px] tabular-nums text-subtle">
+                      {point.applied}
+                    </span>
                   ) : (
                     <span className="text-[10px] text-transparent" aria-hidden>
                       0

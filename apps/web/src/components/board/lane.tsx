@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
  * the point of the boards is that what is urgent is the first thing you see.
  */
 export function Lane({
+  id,
   title,
   hint,
   count,
@@ -19,6 +20,7 @@ export function Lane({
   onOpenChange,
   children,
 }: {
+  id?: string;
   title: string;
   hint?: string;
   count: number;
@@ -31,6 +33,7 @@ export function Lane({
 
   return (
     <section
+      id={id}
       className={cn(
         'overflow-hidden rounded-[var(--radius-card)] border bg-raised shadow-card',
         tone === 'warning' ? 'border-warning/35' : 'border-line',

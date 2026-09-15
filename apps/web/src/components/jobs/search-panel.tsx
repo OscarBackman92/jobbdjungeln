@@ -462,6 +462,18 @@ export function SearchPanel({
     const params = toUrlParams(next);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    try {
+      globalThis.localStorage?.setItem(
+        'jobbdjungeln-last-region',
+        JSON.stringify(next.regions),
+      );
+      globalThis.localStorage?.setItem(
+        'jobbdjungeln-last-municipalities',
+        JSON.stringify(next.municipalities),
+      );
+    } catch {
+      // Ignore storage errors.
+    }
     if (options?.confirm) {
       flashPreviousRef.current = isFetched ? total : null;
       setShowFilters(false);
