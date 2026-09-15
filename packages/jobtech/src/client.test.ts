@@ -39,6 +39,7 @@ describe('hitToJobAd', () => {
       companyName: 'Acme AB',
       location: 'Jönköping',
       description: 'Du har erfarenhet av Excel.',
+      descriptionHtml: '',
       applicationUrl: 'https://acme.test/ansok',
       publishedAt: '2026-06-01',
       applicationDeadline: '2026-06-30',

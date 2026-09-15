@@ -23,7 +23,13 @@ export const jobTechHitSchema = z
   .object({
     id: z.union([z.string(), z.number()]).nullish(),
     headline: z.string().nullish(),
-    description: z.object({ text: z.string().nullish() }).loose().nullish(),
+    description: z
+      .object({
+        text: z.string().nullish(),
+        text_formatted: z.string().nullish(),
+      })
+      .loose()
+      .nullish(),
     employer: z.object({ name: z.string().nullish() }).loose().nullish(),
     workplace_address: z
       .object({ municipality: z.string().nullish(), city: z.string().nullish() })

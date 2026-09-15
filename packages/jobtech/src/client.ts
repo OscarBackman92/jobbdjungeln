@@ -34,6 +34,8 @@ export interface JobAd {
   companyName: string;
   location: string;
   description: string;
+  /** HTML body from JobTech `description.text_formatted`, when present. */
+  descriptionHtml: string;
   /** The Platsbanken ad page. */
   webpageUrl: string;
   /** The employer's own apply URL, when the ad is not handled via AF. */
@@ -169,6 +171,7 @@ export function hitToJobAd(raw: unknown): JobAd | null {
     companyName: hit.employer?.name ?? '',
     location: address.municipality ?? address.city ?? '',
     description: hit.description?.text ?? '',
+    descriptionHtml: hit.description?.text_formatted ?? '',
     webpageUrl: (hit.webpage_url ?? '').slice(0, URL_MAX_LENGTH),
     applicationUrl: applicationUrl(hit),
     publishedAt: isoDay(hit.publication_date),
