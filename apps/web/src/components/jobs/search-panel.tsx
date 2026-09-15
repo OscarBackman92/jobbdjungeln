@@ -6,7 +6,7 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-qu
 import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ActiveFilterChips,
   buildActiveFilterChips,
@@ -32,6 +32,7 @@ import {
   ErrorNote,
   Input,
   Label,
+  LiveRegion,
   Select,
   SelectContent,
   SelectItem,
@@ -214,6 +215,13 @@ export function SearchPanel({
   const [urlReady, setUrlReady] = useState(false);
   const [debouncedDraft, setDebouncedDraft] = useState(initial);
   const [regionDropNotice, setRegionDropNotice] = useState<RegionDropNotice | null>(null);
+  const [countFlash, setCountFlash] = useState<{ current: number; previous: number } | null>(
+    null,
+  );
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
+  const [pendingResultsFocus, setPendingResultsFocus] = useState(false);
+  const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const flashPreviousRef = useRef<number | null>(null);
 
   useEffect(() => {
     const next = stateFromParams(searchParams);
@@ -273,18 +281,6 @@ export function SearchPanel({
   const groupsLoading = draft.fields.length > 0 && (filtersPending || filtersLoading);
 
   const filtered = isFiltered(applied);
-
-  const { data: baseline } = useQuery({
-    queryKey: ['jobs-baseline-total'],
-    enabled: urlReady,
-    staleTime: 60 * 60_000,
-    queryFn: async () => {
-      const response = await fetch('/api/jobs?limit=1&offset=0&sort=pubdate-desc&cv=0');
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? 'Kunde inte hämta totalen.');
-      return (payload as { total: number }).total;
-    },
-  });
 
   const {
     data: draftCount,
@@ -348,7 +344,8 @@ export function SearchPanel({
   const total = data?.pages[0]?.total ?? 0;
   const hasResume = data?.pages[0]?.hasResume ?? true;
   const searching = isFetching && !isFetchingNextPage;
-  const showInitialSkeleton = searching && hits.length === 0 && !isFetched;
+  const showInitialSkeleton = (!urlReady || searching) && hits.length === 0;
+  const showStaleResults = searching && hits.length > 0;
 
   const countReady = typeof draftCount === 'number';
   const draftSettled = samePanelFilters(draft, debouncedDraft);
@@ -361,7 +358,37 @@ export function SearchPanel({
         ? `Visa ${draftCount.toLocaleString('sv-SE')} ${pluralWord(draftCount, 'annons', 'annonser')}`
         : 'Visa annonser';
 
-  function apply(next: SearchState = draft) {
+  useEffect(() => {
+    if (!countFlash) return;
+    const timer = window.setTimeout(() => setCountFlash(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [countFlash]);
+
+  useEffect(() => {
+    if (!pendingResultsFocus || searching || !urlReady) return;
+    setPendingResultsFocus(false);
+
+    const previous = flashPreviousRef.current;
+    flashPreviousRef.current = null;
+    if (previous !== null) {
+      setCountFlash({ current: total, previous });
+    }
+
+    const announce = filtered
+      ? `${total.toLocaleString('sv-SE')} ${pluralWord(total, 'annons', 'annonser')} matchar dina filter`
+      : `${total.toLocaleString('sv-SE')} ${pluralWord(total, 'annons', 'annonser')} i Platsbanken`;
+    setLiveAnnouncement(announce);
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    requestAnimationFrame(() => {
+      const heading = resultsHeadingRef.current;
+      if (!heading) return;
+      heading.focus({ preventScroll: true });
+      heading.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    });
+  }, [pendingResultsFocus, searching, urlReady, total, filtered]);
+
+  function apply(next: SearchState = draft, options?: { confirm?: boolean }) {
     setRegionDropNotice(null);
     setDraft(next);
     setApplied(next);
@@ -369,6 +396,11 @@ export function SearchPanel({
     const params = toUrlParams(next);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    if (options?.confirm) {
+      flashPreviousRef.current = isFetched ? total : null;
+      setShowFilters(false);
+      setPendingResultsFocus(true);
+    }
   }
 
   /** Sort / CV visibility — apply immediately without touching other draft filters. */
@@ -498,7 +530,7 @@ export function SearchPanel({
         onSubmit={(event) => {
           event.preventDefault();
           if (applyDisabled) return;
-          apply();
+          apply(draft, { confirm: true });
         }}
         className="flex flex-col gap-3"
       >
@@ -726,19 +758,11 @@ export function SearchPanel({
         }
       />
 
-      {searching ? (
-        <div
-          className="flex items-center gap-2 rounded-[var(--radius-control)] border border-line bg-brand-soft/40 px-3 py-2 text-[13px] text-brand-text"
-          role="status"
-          aria-live="polite"
-        >
-          <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
-          Söker i Platsbanken…
-        </div>
-      ) : null}
+      <LiveRegion>{liveAnnouncement}</LiveRegion>
 
-      {!urlReady || showInitialSkeleton ? (
-        <div className="flex flex-col gap-3" aria-hidden>
+      {showInitialSkeleton ? (
+        <div className="flex flex-col gap-3" role="status" aria-busy="true">
+          <span className="sr-only">Laddar annonser</span>
           <Skeleton className="h-40 w-full" />
           <Skeleton className="h-40 w-full" />
           <Skeleton className="h-40 w-full" />
@@ -752,22 +776,23 @@ export function SearchPanel({
             </Button>
           }
         />
-      ) : hits.length === 0 ? (
-        <EmptyState
-          icon={Search}
-          title="Inga träffar"
-          description="Prova ett bredare sökord, eller ta bort ett filter."
-        />
       ) : (
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2
+              ref={resultsHeadingRef}
               id={resultsHeadingId}
               tabIndex={-1}
               className="text-[13px] text-subtle outline-none"
-              aria-live="polite"
             >
-              {filtered ? (
+              {countFlash ? (
+                <>
+                  <span className="font-medium text-ink tabular-nums">
+                    {countFlash.current.toLocaleString('sv-SE')}
+                  </span>
+                  {` ${pluralWord(countFlash.current, 'annons', 'annonser')} (var ${countFlash.previous.toLocaleString('sv-SE')})`}
+                </>
+              ) : filtered ? (
                 <>
                   <span className="font-medium text-ink tabular-nums">
                     {total.toLocaleString('sv-SE')}
@@ -833,41 +858,39 @@ export function SearchPanel({
             </div>
           </div>
 
-          {filtered && typeof baseline === 'number' && baseline > 0 ? (
-            <div
-              className="h-2 overflow-hidden rounded-full bg-sunken"
-              aria-hidden
-              title={`${Math.round((total / baseline) * 100)}% av alla annonser`}
-            >
-              <div
-                className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out"
-                style={{
-                  width: `${Math.max(2, Math.min(100, Math.round((total / baseline) * 100)))}%`,
-                }}
-              />
-            </div>
-          ) : null}
+          {hits.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              title="Inga träffar"
+              description="Prova ett bredare sökord, eller ta bort ett filter."
+            />
+          ) : (
+            <>
+              <SearchInsight jobs={hits} today={todayLocal()} />
 
-          <SearchInsight jobs={hits} today={todayLocal()} />
-
-          <ul className="flex flex-col gap-3">
-            {hits.map((job) => (
-              <li key={job.id}>
-                <JobCard job={job} showMatch={applied.matchCv} />
-              </li>
-            ))}
-          </ul>
-          {hasNextPage ? (
-            <Button
-              variant="secondary"
-              onClick={() => void fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="self-center"
-            >
-              {isFetchingNextPage ? <Loader2 className="animate-spin" aria-hidden /> : null}
-              Visa fler
-            </Button>
-          ) : null}
+              <ul
+                className={`flex flex-col gap-3 transition-opacity ${showStaleResults ? 'opacity-50' : 'opacity-100'}`}
+                aria-busy={showStaleResults || undefined}
+              >
+                {hits.map((job) => (
+                  <li key={job.id}>
+                    <JobCard job={job} showMatch={applied.matchCv} />
+                  </li>
+                ))}
+              </ul>
+              {hasNextPage ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => void fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="self-center"
+                >
+                  {isFetchingNextPage ? <Loader2 className="animate-spin" aria-hidden /> : null}
+                  Visa fler
+                </Button>
+              ) : null}
+            </>
+          )}
         </>
       )}
     </div>
