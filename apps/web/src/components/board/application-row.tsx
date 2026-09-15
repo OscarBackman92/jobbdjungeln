@@ -11,7 +11,7 @@ import {
 import { AlertTriangle, CalendarClock, ExternalLink, MessageSquare, Pause } from 'lucide-react';
 import { StatusMenu } from '@/components/board/status-menu';
 import { MatchBadge } from '@/components/jobs/match-badge';
-import { Badge, Checkbox } from '@/components/ui';
+import { Checkbox } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import type { BoardRow } from '@/server/queries/board';
 
@@ -133,13 +133,15 @@ export function ApplicationRow({
 
         {row.matchSnapshot ? (
           <MatchBadge jobId={row.id} match={row.matchSnapshot as MatchSnapshot} />
-        ) : row.matchScore !== null ? (
-          <Badge
-            tone={row.matchScore >= 70 ? 'positive' : row.matchScore >= 40 ? 'info' : 'neutral'}
+        ) : (
+          <span
+            className="inline-flex min-w-8 justify-center text-[13px] text-subtle"
+            title="Ingen matchdata"
           >
-            {row.matchScore}%
-          </Badge>
-        ) : null}
+            <span aria-hidden="true">–</span>
+            <span className="sr-only">Ingen matchdata</span>
+          </span>
+        )}
 
         <StatusMenu id={row.id} status={row.status as Status} salaryClaim={row.salaryClaim} />
 

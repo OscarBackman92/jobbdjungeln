@@ -55,6 +55,17 @@ export function BoardView({
     () => lanes.flatMap((lane) => lane.rows.map((row) => row.id)),
     [lanes],
   );
+  const rowsById = useMemo(() => {
+    const map = new Map<string, BoardRow>();
+    for (const lane of lanes) {
+      for (const row of lane.rows) map.set(row.id, row);
+    }
+    return map;
+  }, [lanes]);
+  const selectedRows = useMemo(
+    () => selected.map((id) => rowsById.get(id)).filter((row): row is BoardRow => Boolean(row)),
+    [selected, rowsById],
+  );
 
   // Debounced, so typing does not fire a server round-trip per keystroke.
   useEffect(() => {
@@ -121,7 +132,7 @@ export function BoardView({
           </Label>
         </span>
 
-        {selected.length > 0 ? null : (
+        {selected.length === 0 ? (
           <Button
             size="sm"
             variant="ghost"
@@ -130,7 +141,7 @@ export function BoardView({
           >
             Välj alla ({allIds.length})
           </Button>
-        )}
+        ) : null}
       </div>
 
       {total === 0 ? (
@@ -168,7 +179,13 @@ export function BoardView({
         </div>
       )}
 
-      <BulkBar selected={selected} onClear={() => setSelected([])} variant={variant} />
+      <BulkBar
+        selected={selectedRows}
+        totalCount={allIds.length}
+        onClear={() => setSelected([])}
+        onSelectAll={() => setSelected(allIds)}
+        variant={variant}
+      />
       <ApplicationSheet id={openId} onClose={() => setOpenId(null)} />
     </div>
   );
