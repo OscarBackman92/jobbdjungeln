@@ -10,11 +10,12 @@ import {
 } from '@jobbdjungeln/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { StatusMenu } from '@/components/board/status-menu';
 import {
   Button,
+  Checkbox,
   ConfirmDialog,
   Dialog,
   DialogBody,
@@ -25,6 +26,7 @@ import {
   ErrorNote,
   Field,
   Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -97,6 +99,9 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [remindBeforeDeadline, setRemindBeforeDeadline] = useState(false);
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['application', id],
@@ -104,9 +109,36 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
     enabled: id !== null,
   });
 
+  useEffect(() => {
+    setDirty(false);
+    setError(undefined);
+    setConfirmDiscard(false);
+    if (!data) {
+      setRemindBeforeDeadline(false);
+      return;
+    }
+    const hasOwnReminder = Boolean(data.applyBy) && data.applyBy !== data.deadline;
+    setRemindBeforeDeadline(hasOwnReminder);
+  }, [data]);
+
+  function requestClose() {
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    onClose();
+  }
+
+  function discardAndClose() {
+    setConfirmDiscard(false);
+    setDirty(false);
+    onClose();
+  }
+
   function save(formData: FormData) {
     if (!id) return;
     setError(undefined);
+    const applyBy = remindBeforeDeadline ? String(formData.get('applyBy') ?? '') : '';
     startTransition(async () => {
       const result = await updateApplicationAction({
         id,
@@ -117,7 +149,7 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
         adUrl: String(formData.get('adUrl') ?? ''),
         appliedAt: String(formData.get('appliedAt') ?? ''),
         deadline: String(formData.get('deadline') ?? ''),
-        applyBy: String(formData.get('applyBy') ?? ''),
+        applyBy,
         nextActionAt: String(formData.get('nextActionAt') ?? ''),
         salaryClaim: String(formData.get('salaryClaim') ?? ''),
         contactName: String(formData.get('contactName') ?? ''),
@@ -126,6 +158,7 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
       });
       if (result.ok) {
         toast.success('Sparat');
+        setDirty(false);
         await queryClient.invalidateQueries({ queryKey: ['application', id] });
       } else {
         setError(result.error);
@@ -171,7 +204,12 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
 
   return (
     <>
-      <Dialog open={id !== null} onOpenChange={(open) => !open && onClose()}>
+      <Dialog
+        open={id !== null}
+        onOpenChange={(open) => {
+          if (!open) requestClose();
+        }}
+      >
         <DialogContent className="sm:w-[min(46rem,calc(100vw-2rem))]">
           {isPending ? (
             <div className="flex flex-col gap-3 p-5">
@@ -229,7 +267,11 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
                 </div>
 
                 <TabsContent value="detaljer" className="flex min-h-0 flex-1 flex-col">
-                  <form action={save} className="flex min-h-0 flex-1 flex-col">
+                  <form
+                    action={save}
+                    className="flex min-h-0 flex-1 flex-col"
+                    onChange={() => setDirty(true)}
+                  >
                     <DialogBody className="grid gap-4 sm:grid-cols-2">
                       {error ? (
                         <div className="sm:col-span-2">
@@ -279,16 +321,20 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
                         )}
                       </Field>
 
-                      <Field label="Sökt datum">
-                        {(props) => (
-                          <Input
-                            {...props}
-                            name="appliedAt"
-                            type="date"
-                            defaultValue={data.appliedAt ?? ''}
-                          />
-                        )}
-                      </Field>
+                      {data.status !== 'wishlist' ? (
+                        <Field label="Sökt datum">
+                          {(props) => (
+                            <Input
+                              {...props}
+                              name="appliedAt"
+                              type="date"
+                              defaultValue={data.appliedAt ?? ''}
+                            />
+                          )}
+                        </Field>
+                      ) : (
+                        <input type="hidden" name="appliedAt" value={data.appliedAt ?? ''} />
+                      )}
                       <Field label="Sista ansökningsdag">
                         {(props) => (
                           <Input
@@ -299,16 +345,39 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
                           />
                         )}
                       </Field>
-                      <Field label="Sök senast" hint="Din egen påminnelse.">
-                        {(props) => (
-                          <Input
-                            {...props}
-                            name="applyBy"
-                            type="date"
-                            defaultValue={data.applyBy ?? ''}
+
+                      <div className="flex flex-col gap-2 sm:col-span-2">
+                        <span className="flex items-center gap-2">
+                          <Checkbox
+                            id={`remind-${data.id}`}
+                            checked={remindBeforeDeadline}
+                            onCheckedChange={(value) => {
+                              setRemindBeforeDeadline(value === true);
+                              setDirty(true);
+                            }}
                           />
-                        )}
-                      </Field>
+                          <Label htmlFor={`remind-${data.id}`} className="font-normal">
+                            Påminn mig före sista dagen
+                          </Label>
+                        </span>
+                        {remindBeforeDeadline ? (
+                          <Field label="Sök senast" hint="Din egen påminnelse.">
+                            {(props) => (
+                              <Input
+                                {...props}
+                                name="applyBy"
+                                type="date"
+                                defaultValue={
+                                  data.applyBy && data.applyBy !== data.deadline
+                                    ? data.applyBy
+                                    : ''
+                                }
+                              />
+                            )}
+                          </Field>
+                        ) : null}
+                      </div>
+
                       <Field label="Följ upp" hint="Dyker upp på Översikt.">
                         {(props) => (
                           <Input
@@ -359,19 +428,25 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
                       </Field>
                     </DialogBody>
 
-                    <DialogFooter>
+                    <DialogFooter className="sm:justify-between">
                       <Button
                         type="button"
-                        variant="danger"
+                        variant="ghost"
+                        className="justify-start text-danger-text hover:bg-danger-soft hover:text-danger-text"
                         onClick={remove}
                         disabled={pending}
                       >
                         <Trash2 aria-hidden />
                         Ta bort
                       </Button>
-                      <Button type="submit" variant="primary" loading={pending}>
-                        Spara
-                      </Button>
+                      <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                        <Button type="button" variant="ghost" onClick={requestClose}>
+                          Avbryt
+                        </Button>
+                        <Button type="submit" variant="primary" loading={pending}>
+                          Spara
+                        </Button>
+                      </div>
                     </DialogFooter>
                   </form>
                 </TabsContent>
@@ -457,6 +532,16 @@ export function ApplicationSheet({ id, onClose }: { id: string | null; onClose: 
         confirmLabel="Ta bort permanent"
         pending={pending}
         onConfirm={confirmRemove}
+      />
+      <ConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title="Osparade ändringar"
+        description="Vill du stänga utan att spara?"
+        confirmLabel="Stäng utan att spara"
+        cancelLabel="Fortsätt redigera"
+        pending={false}
+        onConfirm={discardAndClose}
       />
     </>
   );
