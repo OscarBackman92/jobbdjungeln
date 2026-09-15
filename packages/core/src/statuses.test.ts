@@ -59,14 +59,10 @@ describe('transitions', () => {
     expect(allowedNextStatuses('wishlist')).toEqual(['applied', 'withdrawn']);
   });
 
-  it('allows moving between statuses inside the same stage', () => {
-    // screening and forwarded are both "kontakt".
+  it('allows moving freely between application statuses', () => {
     expect(isTransitionAllowed('screening', 'forwarded')).toBe(true);
-  });
-
-  it('allows reopening a closed application', () => {
+    expect(isTransitionAllowed('offer', 'applied')).toBe(true);
     expect(isTransitionAllowed('rejected', 'interview')).toBe(true);
-    // …but not back into the wishlist: it has already been applied to.
     expect(isTransitionAllowed('rejected', 'wishlist')).toBe(false);
   });
 
@@ -77,8 +73,10 @@ describe('transitions', () => {
     }
   });
 
-  it('lets an offer only be closed out', () => {
-    expect(allowedNextStatuses('offer').every((next) => isClosed(next))).toBe(true);
+  it('lets an offer move to any other application status', () => {
+    expect(allowedNextStatuses('offer')).toContain('applied');
+    expect(allowedNextStatuses('offer')).toContain('rejected');
+    expect(allowedNextStatuses('offer')).not.toContain('wishlist');
   });
 });
 
