@@ -150,18 +150,23 @@ export function ActiveFilterChips({
 
   return (
     <ul
-      className={cn('m-0 flex list-none flex-wrap items-center gap-2 p-0', className)}
+      className={cn(
+        'm-0 flex list-none items-center gap-2 p-0',
+        'max-sm:-mx-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-1 max-sm:pb-1',
+        'sm:flex-wrap',
+        className,
+      )}
       aria-label="Aktiva filter"
     >
       {visible.map((chip) => (
         <li
           key={chip.key}
-          className="inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-sunken py-1 pr-1 pl-2.5 text-[13px] text-ink"
+          className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full border border-line bg-sunken py-1 pr-1 pl-2.5 text-[13px] text-ink"
         >
           <span className="truncate">{chip.label}</span>
           <button
             type="button"
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:size-6"
             aria-label={`Ta bort filter: ${chip.label}`}
             onClick={() => onRemove(chip)}
           >
@@ -170,20 +175,20 @@ export function ActiveFilterChips({
         </li>
       ))}
       {hiddenCount > 0 ? (
-        <li>
+        <li className="shrink-0">
           <button
             type="button"
-            className="inline-flex h-8 items-center rounded-full border border-line bg-raised px-2.5 text-[13px] font-medium text-brand-text hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="inline-flex min-h-11 items-center rounded-full border border-line bg-raised px-3 text-[13px] font-medium text-brand-text hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:h-8 sm:min-h-0 sm:px-2.5"
             onClick={onExpand}
           >
             +{hiddenCount} till
           </button>
         </li>
       ) : null}
-      <li>
+      <li className="shrink-0">
         <button
           type="button"
-          className="text-[13px] font-medium text-brand-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          className="inline-flex min-h-11 items-center px-2 text-[13px] font-medium text-brand-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:min-h-0 sm:px-0"
           onClick={onClearAll}
         >
           Rensa alla
