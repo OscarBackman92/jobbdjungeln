@@ -41,50 +41,77 @@ describe('buildFunnel', () => {
 
 describe('buildNextActions', () => {
   it('prefers an explicit follow-up over the apply-by nudge', () => {
-    const actions = buildNextActions(
-      [row({ id: '1', status: 'wishlist', applyBy: '2026-06-30', nextActionAt: '2026-06-20' })],
+    const { actions } = buildNextActions(
+      [
+        row({
+          id: '1',
+          status: 'wishlist',
+          applyBy: '2026-06-20',
+          applyByIsAuto: false,
+          nextActionAt: '2026-06-18',
+        }),
+      ],
       TODAY,
     );
-    expect(actions).toHaveLength(1);
-    expect(actions[0]?.kind).toBe('follow_up');
-    expect(actions[0]?.due).toBe('2026-06-20');
+    expect(actions.some((action) => action.kind === 'follow_up')).toBe(true);
+    expect(actions.find((action) => action.kind === 'follow_up')?.due).toBe('2026-06-18');
   });
 
-  it('marks a real ad deadline apart from the automatic nudge', () => {
-    const [withDeadline] = buildNextActions(
-      [row({ id: '1', status: 'wishlist', applyBy: '2026-06-30', deadline: '2026-06-30' })],
+  it('marks a real ad deadline apart from a user reminder', () => {
+    const { actions: withDeadline } = buildNextActions(
+      [row({ id: '1', status: 'wishlist', applyBy: '2026-06-20', deadline: '2026-06-20' })],
       TODAY,
     );
-    expect(withDeadline?.kind).toBe('deadline');
+    expect(withDeadline.some((action) => action.kind === 'deadline')).toBe(true);
 
-    const [nudge] = buildNextActions(
-      [row({ id: '2', status: 'wishlist', applyBy: '2026-06-30' })],
+    const { actions: nudge } = buildNextActions(
+      [
+        row({
+          id: '2',
+          status: 'wishlist',
+          applyBy: '2026-06-20',
+          applyByIsAuto: false,
+        }),
+      ],
       TODAY,
     );
-    expect(nudge?.kind).toBe('apply_by');
+    expect(nudge.some((action) => action.kind === 'apply_by')).toBe(true);
+  });
+
+  it('ignores automatic apply-by nudges and far-away dates', () => {
+    const { actions, nextDeadline } = buildNextActions(
+      [
+        row({ id: 'auto', status: 'wishlist', applyBy: '2026-06-20' }),
+        row({ id: 'far', status: 'applied', nextActionAt: '2026-08-01' }),
+      ],
+      TODAY,
+    );
+    expect(actions).toEqual([]);
+    expect(nextDeadline?.title).toBe('Ekonomiassistent');
+    expect(nextDeadline?.due).toBe('2026-08-01');
   });
 
   it('flags a passed date as overdue', () => {
-    const [action] = buildNextActions(
+    const { actions } = buildNextActions(
       [row({ id: '1', status: 'applied', nextActionAt: '2026-06-01' })],
       TODAY,
     );
-    expect(action?.overdue).toBe(true);
+    expect(actions[0]?.overdue).toBe(true);
   });
 
-  it('sorts by due date, soonest first', () => {
-    const actions = buildNextActions(
+  it('sorts overdue and waiting first, then by due date', () => {
+    const { actions } = buildNextActions(
       [
-        row({ id: 'late', status: 'applied', nextActionAt: '2026-07-01' }),
+        row({ id: 'later', status: 'applied', nextActionAt: '2026-06-20' }),
         row({ id: 'soon', status: 'applied', nextActionAt: '2026-06-16' }),
       ],
       TODAY,
     );
-    expect(actions.map((action) => action.id)).toEqual(['soon', 'late']);
+    expect(actions.map((action) => action.id)).toEqual(['soon', 'later']);
   });
 
   it('leaves closed and archived rows out', () => {
-    const actions = buildNextActions(
+    const { actions } = buildNextActions(
       [
         row({ id: 'closed', status: 'rejected', nextActionAt: '2026-06-16' }),
         row({
@@ -103,7 +130,7 @@ describe('buildNextActions', () => {
     const many = Array.from({ length: 20 }, (_, index) =>
       row({ id: `${index}`, status: 'applied', nextActionAt: '2026-06-20' }),
     );
-    expect(buildNextActions(many, TODAY)).toHaveLength(8);
+    expect(buildNextActions(many, TODAY).actions).toHaveLength(8);
   });
 });
 
