@@ -51,7 +51,14 @@ function applyHref(job: JobHit): string {
   return job.applicationUrl || job.webpageUrl;
 }
 
-export function JobCard({ job }: { job: JobHit }) {
+export function JobCard({
+  job,
+  showMatch = true,
+}: {
+  job: JobHit;
+  /** When false, CV match badges stay hidden without refetching. */
+  showMatch?: boolean;
+}) {
   const [savedId, setSavedId] = useState<string | null>(job.trackedApplicationId);
   const [reading, setReading] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -145,7 +152,7 @@ export function JobCard({ job }: { job: JobHit }) {
               ) : null}
             </p>
           </div>
-          <MatchBadge jobId={job.id} match={job.match} />
+          {showMatch ? <MatchBadge jobId={job.id} match={job.match} /> : null}
         </div>
 
         {job.description ? (
