@@ -23,8 +23,8 @@ const QUESTIONS = [
     a: 'Annonstexten delas upp i rader som klassas som krav eller meriterande utifrån hur de är formulerade. Dina kompetenser matchas mot dem, och poängen är hur stor andel av annonsens krav du täcker — aldrig hur stor andel av ditt CV som nämns. Ett längre CV kan alltså inte ge en högre siffra.',
   },
   {
-    q: 'Varför visas ingen matchning ibland?',
-    a: 'När en annons är för kort eller listar för få tydliga krav går det inte att ge en rättvis siffra. Då visas "Match oklar" i stället för ett tal som skulle se exakt ut utan att vara det.',
+    q: 'Varför ser matchningen osäker ut ibland?',
+    a: 'När en annons listar bara ett fåtal tydliga krav markeras siffran som osäker (streckad kant) och förklaringen säger hur många krav som hittades. Finns inga krav alls visas "Inga krav listade".',
   },
   {
     q: 'Kan jag lägga in jobb jag hittat någon annanstans?',

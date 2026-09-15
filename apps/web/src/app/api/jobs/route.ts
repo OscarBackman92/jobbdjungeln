@@ -31,6 +31,7 @@ export async function GET(request: Request) {
             | 'relevance'
             | 'applydate-asc'
             | 'applydate-desc'
+            | 'cv-match'
             | null) ?? undefined,
         publishedAfter: url.searchParams.get('publicerad') ?? undefined,
         experience: experienceParam === '0' ? false : undefined,

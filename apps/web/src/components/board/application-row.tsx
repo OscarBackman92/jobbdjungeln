@@ -1,14 +1,16 @@
 'use client';
 
+import type { MatchSnapshot } from '@jobbdjungeln/core';
 import {
   formatRelativeDays,
   formatShortDate,
   isSafeExternalUrl,
-  savedDueDisplay,
   type Status,
+  savedDueDisplay,
 } from '@jobbdjungeln/core';
 import { AlertTriangle, CalendarClock, ExternalLink, MessageSquare, Pause } from 'lucide-react';
 import { StatusMenu } from '@/components/board/status-menu';
+import { MatchBadge } from '@/components/jobs/match-badge';
 import { Badge, Checkbox } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import type { BoardRow } from '@/server/queries/board';
@@ -105,11 +107,7 @@ export function ApplicationRow({
           <span
             className={cn(
               'hidden flex-col items-end gap-0 text-[13px] sm:inline-flex',
-              dueOverdue
-                ? 'text-warning-text'
-                : isReminder
-                  ? 'text-subtle'
-                  : 'text-muted',
+              dueOverdue ? 'text-warning-text' : isReminder ? 'text-subtle' : 'text-muted',
             )}
             title={savedDue?.label ?? (showDeadline ? 'Sök senast' : 'Nästa steg')}
           >
@@ -133,7 +131,9 @@ export function ApplicationRow({
           </span>
         ) : null}
 
-        {row.matchScore !== null ? (
+        {row.matchSnapshot ? (
+          <MatchBadge jobId={row.id} match={row.matchSnapshot as MatchSnapshot} />
+        ) : row.matchScore !== null ? (
           <Badge
             tone={row.matchScore >= 70 ? 'positive' : row.matchScore >= 40 ? 'info' : 'neutral'}
           >

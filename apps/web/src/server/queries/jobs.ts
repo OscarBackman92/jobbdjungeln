@@ -7,8 +7,9 @@ import {
   trimSnapshot,
 } from '@jobbdjungeln/core';
 import { schema } from '@jobbdjungeln/db';
-import type { JobAd, SearchParams } from '@jobbdjungeln/jobtech';
+import type { JobAd, SearchParams, SearchSort } from '@jobbdjungeln/jobtech';
 import { eq } from 'drizzle-orm';
+import { compareCvMatch } from '@/components/jobs/match-badge-logic';
 import { db } from '@/lib/db';
 import { jobtech } from '@/lib/jobtech';
 import { trackedAds } from '@/server/applications';
@@ -20,6 +21,9 @@ import { trackedAds } from '@/server/applications';
  * tracks the ad, and how well their CV covers its requirements. Both are done
  * here rather than in the client so a search is one round trip.
  */
+
+const CV_SORT_POOL = 100;
+const JOBTECH_PAGE = 50;
 
 export interface SearchHit extends JobAd {
   alreadyTracked: boolean;
@@ -33,21 +37,64 @@ export interface SearchResponse {
   results: SearchHit[];
   /** Set when the CV is empty, so the UI can explain the missing scores. */
   hasResume: boolean;
+  /** True when CV sort scored only the newest 100 of a larger result set. */
+  cvSortCapped?: boolean;
+}
+
+export type JobSearchParams = Omit<SearchParams, 'sort'> & {
+  sort?: SearchSort | 'cv-match';
+};
+
+function enrichAds(
+  ads: JobAd[],
+  trackedByKey: Map<string, string>,
+  skills: string[],
+  withMatch: boolean,
+  hasResume: boolean,
+): SearchHit[] {
+  return ads.map((ad) => {
+    const trackedApplicationId = trackedByKey.get(normalizeAdUrl(ad.webpageUrl)) ?? null;
+    return {
+      ...ad,
+      alreadyTracked: trackedApplicationId !== null,
+      trackedApplicationId,
+      match:
+        withMatch && hasResume
+          ? trimSnapshot(scorePosting(skills, { title: ad.title, description: ad.description }))
+          : null,
+    };
+  });
+}
+
+async function fetchNewestPool(
+  params: SearchParams,
+): Promise<{ total: number; results: JobAd[] }> {
+  const base = { ...params, sort: 'pubdate-desc' as const, limit: JOBTECH_PAGE };
+  const first = await jobtech().search({ ...base, offset: 0 });
+  if (first.total <= JOBTECH_PAGE || first.results.length < JOBTECH_PAGE) {
+    return { total: first.total, results: first.results.slice(0, CV_SORT_POOL) };
+  }
+  const second = await jobtech().search({ ...base, offset: JOBTECH_PAGE });
+  return {
+    total: first.total,
+    results: [...first.results, ...second.results].slice(0, CV_SORT_POOL),
+  };
 }
 
 export async function searchJobs(
   userId: string,
-  params: SearchParams,
+  params: JobSearchParams,
   { withMatch = true }: { withMatch?: boolean } = {},
 ): Promise<SearchResponse> {
   // Count-only: JobTech `limit=0` returns total without hits — skip enrichment.
   if ((params.limit ?? 25) === 0) {
-    const result = await jobtech().search({ ...params, limit: 0 });
+    const sort =
+      params.sort === 'cv-match' ? 'pubdate-desc' : (params.sort as SearchSort | undefined);
+    const result = await jobtech().search({ ...params, sort, limit: 0 });
     return { total: result.total, results: [], hasResume: true };
   }
 
-  const [result, tracked, resume] = await Promise.all([
-    jobtech().search(params),
+  const [tracked, resume] = await Promise.all([
     trackedAds(userId),
     db().query.resumes.findFirst({ where: eq(schema.resumes.userId, userId) }),
   ]);
@@ -55,24 +102,32 @@ export async function searchJobs(
   const trackedByKey = new Map(tracked.map((row) => [row.key, row.id]));
   const skills = resume ? matchingTermsFromResume(resume) : [];
   const hasResume = skills.length > 0;
+  const cvSort = params.sort === 'cv-match';
+
+  if (cvSort) {
+    const pool = await fetchNewestPool(params);
+    const enriched = enrichAds(pool.results, trackedByKey, skills, withMatch, hasResume);
+    enriched.sort(compareCvMatch);
+    const offset = params.offset ?? 0;
+    const limit = params.limit ?? 25;
+    const page = enriched.slice(offset, offset + limit);
+    return {
+      total: enriched.length,
+      hasResume,
+      results: page,
+      cvSortCapped: pool.total > CV_SORT_POOL,
+    };
+  }
+
+  const result = await jobtech().search({
+    ...params,
+    sort: params.sort as SearchSort | undefined,
+  });
 
   return {
     total: result.total,
     hasResume,
-    results: result.results.map((ad) => {
-      const trackedApplicationId = trackedByKey.get(normalizeAdUrl(ad.webpageUrl)) ?? null;
-      return {
-        ...ad,
-        alreadyTracked: trackedApplicationId !== null,
-        trackedApplicationId,
-        match:
-          withMatch && hasResume
-            ? trimSnapshot(
-                scorePosting(skills, { title: ad.title, description: ad.description }),
-              )
-            : null,
-      };
-    }),
+    results: enrichAds(result.results, trackedByKey, skills, withMatch, hasResume),
   };
 }
 
