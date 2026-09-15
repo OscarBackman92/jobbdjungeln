@@ -237,7 +237,8 @@ export function createJobTechClient(options: JobTechClientOptions = {}) {
     async search(params: SearchParams = {}): Promise<SearchResult> {
       const query = new URLSearchParams();
       query.set('offset', String(Math.max(0, params.offset ?? 0)));
-      query.set('limit', String(Math.min(Math.max(1, params.limit ?? 25), MAX_LIMIT)));
+      // JobTech accepts limit 0–50; 0 returns only `total` (no hits).
+      query.set('limit', String(Math.min(Math.max(0, params.limit ?? 25), MAX_LIMIT)));
       const sort = SEARCH_SORTS.includes(params.sort as SearchSort)
         ? (params.sort as SearchSort)
         : 'pubdate-desc';
