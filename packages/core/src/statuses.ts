@@ -184,26 +184,39 @@ export function hasApplied(status: Status): boolean {
 /**
  * Statuses the UI may offer from `status`, excluding the current one.
  *
- * From Sparad only Ansökt and Återkallad — jumping to Accepterat/Avslag without
- * an application date would distort the overview.
+ * From Sparad only Ansökt and Återkallad. From any application status, every
+ * other application status is reachable so the user can correct the pipeline.
  */
 export function allowedNextStatuses(status: Status): Status[] {
   if (status === 'wishlist') {
     return ['applied', 'withdrawn'];
   }
-  const currentStage = stageForStatus(status);
-  const reachable = ALLOWED_STAGE_TRANSITIONS[currentStage];
-  return STATUSES.filter((candidate) => {
-    if (candidate === status) return false;
-    const stage = stageForStatus(candidate);
-    return stage === currentStage || reachable.includes(stage);
-  });
+  return STATUSES.filter((candidate) => candidate !== 'wishlist' && candidate !== status);
 }
 
 export function isTransitionAllowed(from: Status, to: Status): boolean {
   if (from === to) return true;
   return allowedNextStatuses(from).includes(to);
 }
+
+/** Menu groups for the applied-board status picker. */
+export const STATUS_MENU_GROUPS = [
+  {
+    label: 'Pågående',
+    statuses: [
+      'applied',
+      'forwarded',
+      'screening',
+      'interview',
+      'offer',
+      'accepted',
+    ] as const satisfies readonly Status[],
+  },
+  {
+    label: 'Avslutad',
+    statuses: ['rejected', 'no_response', 'withdrawn'] as const satisfies readonly Status[],
+  },
+] as const;
 
 /** Ordered pipeline used by the funnel chart; terminal statuses are excluded. */
 export const PIPELINE_STAGES: readonly Stage[] = [

@@ -47,14 +47,32 @@ export function BoardView({
   const [search, setSearch] = useState(params.get('sok') ?? '');
   const [selected, setSelected] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openLanes, setOpenLanes] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(lanes.map((lane) => [lane.key, lane.defaultOpen ?? true])),
+  );
   const archivedId = useId();
 
   const archived = params.get('arkiverade') === '1';
   const total = lanes.reduce((sum, lane) => sum + lane.rows.length, 0);
-  const allIds = useMemo(
-    () => lanes.flatMap((lane) => lane.rows.map((row) => row.id)),
-    [lanes],
+
+  useEffect(() => {
+    setOpenLanes((current) => {
+      const next = { ...current };
+      for (const lane of lanes) {
+        if (next[lane.key] === undefined) next[lane.key] = lane.defaultOpen ?? true;
+      }
+      return next;
+    });
+  }, [lanes]);
+
+  const visibleIds = useMemo(
+    () =>
+      lanes
+        .filter((lane) => openLanes[lane.key] !== false)
+        .flatMap((lane) => lane.rows.map((row) => row.id)),
+    [lanes, openLanes],
   );
+
   const rowsById = useMemo(() => {
     const map = new Map<string, BoardRow>();
     for (const lane of lanes) {
@@ -80,10 +98,11 @@ export function BoardView({
     return () => clearTimeout(timer);
   }, [search, params, router]);
 
-  // A row that has scrolled out of the filtered set must not stay selected.
+  // Drop selections that are no longer on the board at all.
   useEffect(() => {
+    const allIds = lanes.flatMap((lane) => lane.rows.map((row) => row.id));
     setSelected((current) => current.filter((id) => allIds.includes(id)));
-  }, [allIds]);
+  }, [lanes]);
 
   function toggleArchived(next: boolean) {
     const params_ = new URLSearchParams(params.toString());
@@ -97,6 +116,11 @@ export function BoardView({
       isSelected ? [...current, id] : current.filter((value) => value !== id),
     );
   }
+
+  const selectAllLabel =
+    variant === 'applied'
+      ? `Välj alla ${visibleIds.length} synliga`
+      : `Välj alla (${visibleIds.length})`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -136,10 +160,10 @@ export function BoardView({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setSelected(allIds)}
-            disabled={allIds.length === 0}
+            onClick={() => setSelected(visibleIds)}
+            disabled={visibleIds.length === 0}
           >
-            Välj alla ({allIds.length})
+            {selectAllLabel}
           </Button>
         ) : null}
       </div>
@@ -162,7 +186,10 @@ export function BoardView({
               hint={lane.hint}
               count={lane.rows.length}
               tone={lane.tone}
-              defaultOpen={lane.defaultOpen ?? true}
+              open={openLanes[lane.key] !== false}
+              onOpenChange={(open) =>
+                setOpenLanes((current) => ({ ...current, [lane.key]: open }))
+              }
             >
               {lane.rows.map((row) => (
                 <ApplicationRow
@@ -172,6 +199,7 @@ export function BoardView({
                   onSelect={select}
                   onOpen={setOpenId}
                   showDeadline={showDeadline}
+                  showAppliedMeta={variant === 'applied'}
                 />
               ))}
             </Lane>
@@ -181,9 +209,9 @@ export function BoardView({
 
       <BulkBar
         selected={selectedRows}
-        totalCount={allIds.length}
+        totalCount={visibleIds.length}
         onClear={() => setSelected([])}
-        onSelectAll={() => setSelected(allIds)}
+        onSelectAll={() => setSelected(visibleIds)}
         variant={variant}
       />
       <ApplicationSheet id={openId} onClose={() => setOpenId(null)} />

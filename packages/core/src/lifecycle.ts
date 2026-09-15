@@ -227,7 +227,7 @@ export const APPLIED_LANE_LABELS: Readonly<Record<AppliedLane, string>> = {
 
 export const APPLIED_LANE_HINTS: Readonly<Record<AppliedLane, string>> = {
   vantar_for_lange: `Inget svar på ${WAIT_THRESHOLD_DAYS} dagar — hör av dig`,
-  nyligen_sokta: 'Skickade nyligen, ge det några dagar',
+  nyligen_sokta: `Skickade de senaste ${WAIT_THRESHOLD_DAYS - 1} dagarna — ge det tid`,
   i_dialog: 'Kontakt eller intervju pågår',
   erbjudande: 'Dags att svara',
   avslutade: 'Klara — avslag, inget svar eller tackade ja/nej',
