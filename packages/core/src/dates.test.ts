@@ -4,7 +4,9 @@ import {
   addMonths,
   daysBetween,
   daysInMonth,
+  formatDeadlineDisplay,
   formatLongDate,
+  formatPublishedDisplay,
   formatRelativeDays,
   formatShortDate,
   isIsoDate,
@@ -106,6 +108,31 @@ describe('formatting', () => {
     expect(formatRelativeDays('2026-05-09', '2026-05-10')).toBe('igår');
     expect(formatRelativeDays('2026-05-13', '2026-05-10')).toBe('om 3 dagar');
     expect(formatRelativeDays('2026-05-07', '2026-05-10')).toBe('3 dagar sedan');
+  });
+
+  it('formats application deadlines with urgency', () => {
+    expect(formatDeadlineDisplay('2026-05-10', '2026-05-10')).toEqual({
+      label: 'Sista dag idag',
+      absolute: '10 maj',
+      urgency: 'danger',
+    });
+    expect(formatDeadlineDisplay('2026-05-11', '2026-05-10')?.urgency).toBe('warning');
+    expect(formatDeadlineDisplay('2026-05-14', '2026-05-10')?.label).toBe(
+      'Sista dag om 4 dagar',
+    );
+    expect(formatDeadlineDisplay('2026-05-09', '2026-05-10')?.label).toBe(
+      'Sista dagen har passerat',
+    );
+    expect(formatDeadlineDisplay('2026-10-14', '2026-05-10')?.label).toBe(
+      'Sista dag 14 oktober',
+    );
+  });
+
+  it('formats publication dates relatively', () => {
+    expect(formatPublishedDisplay('2026-05-10', '2026-05-10')).toBe('Publicerad idag');
+    expect(formatPublishedDisplay('2026-05-07', '2026-05-10')).toBe(
+      'Publicerad för 3 dagar sedan',
+    );
   });
 
   it('returns an empty string for missing input rather than throwing', () => {

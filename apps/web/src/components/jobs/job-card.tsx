@@ -1,8 +1,13 @@
 'use client';
 
 import type { MatchSnapshot } from '@jobbdjungeln/core';
-import { formatShortDate, isSafeExternalUrl } from '@jobbdjungeln/core';
 import {
+  formatDeadlineDisplay,
+  formatPublishedDisplay,
+  isSafeExternalUrl,
+} from '@jobbdjungeln/core';
+import {
+  AlertTriangle,
   Bookmark,
   BookmarkCheck,
   Building2,
@@ -18,6 +23,7 @@ import { JobAdDialog } from '@/components/jobs/job-ad-dialog';
 import { MatchBadge } from '@/components/jobs/match-badge';
 import { formatMatchSummary } from '@/components/jobs/match-badge-logic';
 import { Badge, Button, Card } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import {
   createApplicationAction,
   deleteApplicationAction,
@@ -46,30 +52,47 @@ export interface JobHit {
   match: MatchSnapshot | null;
 }
 
-const EXCERPT_LENGTH = 220;
-
-function applyHref(job: JobHit): string {
-  return job.applicationUrl || job.webpageUrl;
+function applyHref(job: JobHit): { href: string; viaPlatsbanken: boolean } {
+  if (job.applicationUrl && isSafeExternalUrl(job.applicationUrl)) {
+    return { href: job.applicationUrl, viaPlatsbanken: false };
+  }
+  return { href: job.webpageUrl, viaPlatsbanken: true };
 }
+
+function normalizeExcerpt(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+const DEADLINE_CLASS: Record<string, string> = {
+  danger: 'text-danger-text',
+  warning: 'text-warning-text',
+  'warning-soft': 'text-warning-text/80',
+  muted: 'text-subtle',
+  neutral: 'text-subtle',
+};
 
 export function JobCard({
   job,
   showMatch = true,
+  headingRef,
 }: {
   job: JobHit;
   /** When false, CV match badges stay hidden without refetching. */
   showMatch?: boolean;
+  /** Optional ref target for focusing the first newly loaded card. */
+  headingRef?: (node: HTMLButtonElement | null) => void;
 }) {
   const [savedId, setSavedId] = useState<string | null>(job.trackedApplicationId);
   const [reading, setReading] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const saved = savedId !== null;
-  const excerpt = job.description.slice(0, EXCERPT_LENGTH);
-  const truncated = job.description.length > EXCERPT_LENGTH;
-  const applyUrl = applyHref(job);
-  const canApply = isSafeExternalUrl(applyUrl);
+  const excerpt = normalizeExcerpt(job.description);
+  const apply = applyHref(job);
+  const canApply = isSafeExternalUrl(apply.href);
   const matchSummary = showMatch && job.match ? formatMatchSummary(job.match) : null;
+  const deadline = formatDeadlineDisplay(job.applicationDeadline);
+  const published = formatPublishedDisplay(job.publishedAt);
 
   function toggleSave() {
     if (savedId) {
@@ -131,8 +154,9 @@ export function JobCard({
             <h3 className="text-[15px] font-semibold tracking-tight text-ink">
               <button
                 type="button"
+                ref={headingRef}
                 onClick={() => setReading(true)}
-                className="text-left underline-offset-2 hover:underline"
+                className="text-left underline-offset-2 hover:underline outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
               >
                 {job.title}
               </button>
@@ -152,6 +176,21 @@ export function JobCard({
               {job.workingHoursType ? (
                 <Badge tone="neutral">{job.workingHoursType}</Badge>
               ) : null}
+              {published ? <span className="text-subtle">{published}</span> : null}
+              {deadline ? (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1',
+                    DEADLINE_CLASS[deadline.urgency],
+                  )}
+                  title={deadline.absolute}
+                >
+                  {deadline.urgency === 'danger' ? (
+                    <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                  ) : null}
+                  {deadline.label}
+                </span>
+              ) : null}
             </p>
           </div>
           {showMatch ? <MatchBadge jobId={job.id} match={job.match} /> : null}
@@ -161,11 +200,8 @@ export function JobCard({
           <p className="mt-2 text-[12px] leading-snug text-muted">{matchSummary}</p>
         ) : null}
 
-        {job.description ? (
-          <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap text-muted">
-            {excerpt}
-            {truncated ? '…' : null}
-          </p>
+        {excerpt ? (
+          <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted">{excerpt}</p>
         ) : null}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -173,16 +209,6 @@ export function JobCard({
             <FileText aria-hidden />
             Läs annonsen
           </Button>
-
-          {canApply ? (
-            <Button variant="secondary" size="sm" asChild>
-              <a href={applyUrl} target="_blank" rel="noopener noreferrer">
-                <Send aria-hidden />
-                Ansök
-                <ExternalLink aria-hidden />
-              </a>
-            </Button>
-          ) : null}
 
           <Button
             variant="ghost"
@@ -195,13 +221,15 @@ export function JobCard({
             {saved ? 'Sparad' : 'Spara'}
           </Button>
 
-          <span className="ml-auto text-[13px] text-subtle">
-            {job.applicationDeadline
-              ? `Sista dag ${formatShortDate(job.applicationDeadline)}`
-              : job.publishedAt
-                ? `Publicerad ${formatShortDate(job.publishedAt)}`
-                : null}
-          </span>
+          {canApply ? (
+            <Button variant="secondary" size="sm" asChild>
+              <a href={apply.href} target="_blank" rel="noopener noreferrer">
+                <Send aria-hidden />
+                {apply.viaPlatsbanken ? 'Ansök via Platsbanken' : 'Ansök'}
+                <ExternalLink aria-hidden />
+              </a>
+            </Button>
+          ) : null}
         </div>
 
         {saved && !job.alreadyTracked ? (

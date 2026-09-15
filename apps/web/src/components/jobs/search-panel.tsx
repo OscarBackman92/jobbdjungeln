@@ -8,7 +8,7 @@ import {
   useQueries,
   useQuery,
 } from '@tanstack/react-query';
-import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -359,6 +359,13 @@ export function SearchPanel({
   const searching = isFetching && !isFetchingNextPage;
   const showInitialSkeleton = (!urlReady || searching) && hits.length === 0;
   const showStaleResults = searching && hits.length > 0;
+  const [focusHitIndex, setFocusHitIndex] = useState<number | null>(null);
+
+  async function loadMore() {
+    const before = hits.length;
+    const result = await fetchNextPage();
+    if (!result.isError) setFocusHitIndex(before);
+  }
 
   const countReady = typeof draftCount === 'number';
   const draftSettled = samePanelFilters(draft, debouncedDraft);
@@ -987,22 +994,39 @@ export function SearchPanel({
                 className={`flex flex-col gap-3 transition-opacity ${showStaleResults ? 'opacity-50' : 'opacity-100'}`}
                 aria-busy={showStaleResults || undefined}
               >
-                {hits.map((job) => (
+                {hits.map((job, index) => (
                   <li key={job.id}>
-                    <JobCard job={job} showMatch={applied.matchCv} />
+                    <JobCard
+                      job={job}
+                      showMatch={applied.matchCv}
+                      headingRef={
+                        index === focusHitIndex
+                          ? (node) => {
+                              if (!node) return;
+                              node.focus({ preventScroll: true });
+                              node.scrollIntoView({ block: 'nearest' });
+                              setFocusHitIndex(null);
+                            }
+                          : undefined
+                      }
+                    />
                   </li>
                 ))}
               </ul>
               {hasNextPage ? (
                 <Button
                   variant="secondary"
-                  onClick={() => void fetchNextPage()}
+                  onClick={() => void loadMore()}
                   disabled={isFetchingNextPage}
+                  loading={isFetchingNextPage}
                   className="self-center"
                 >
-                  {isFetchingNextPage ? <Loader2 className="animate-spin" aria-hidden /> : null}
-                  Visa fler
+                  {`Visa ${PAGE_SIZE} till (${hits.length.toLocaleString('sv-SE')} av ${total.toLocaleString('sv-SE')})`}
                 </Button>
+              ) : hits.length > 0 ? (
+                <p className="self-center text-[13px] text-subtle">
+                  {`Alla ${total.toLocaleString('sv-SE')} ${pluralWord(total, 'annons', 'annonser')} visas`}
+                </p>
               ) : null}
             </>
           )}
