@@ -165,10 +165,30 @@ att ignorera avsändaren, och nästa som betyder något blir oläst.
 
 ## Drift
 
+### Produktion (skarpt)
+
+| Del | Var |
+| --- | --- |
+| App | **Vercel** — projektet `jobbdjungeln-web` |
+| Domän | `https://jobbdjungeln.obackman.se` (DNS via Loopia → Vercel) |
+| Databas | **Neon Postgres** (Frankfurt / `eu-central-1`) |
+| E-post | **Brevo** — `EMAIL_FROM` ska vara en adress på autentiserad domän (t.ex. `noreply@obackman.se`), inte Gmail |
+| Cron | Vercel Cron mot `/api/cron/*` med `CRON_SECRET` |
+
+Viktiga miljövariabler i Vercel Production: `DATABASE_URL`, `AUTH_SECRET`,
+`APP_URL=https://jobbdjungeln.obackman.se`, `BREVO_API_KEY`, `EMAIL_FROM`,
+`CRON_SECRET`. Preview använder `*.vercel.app`; `APP_URL` och Better Auths
+`trustedOrigins` måste tillåta både skarp domän och Vercel-alias.
+
+Importerade konton från den gamla Django-appen har **inga lösenord** — användare
+går in via glömt lösenord (eller manuellt satt hash vid cutover).
+
+### Container / annan host
+
 `Dockerfile` bygger en fristående image (Next standalone, icke-root, med
-healthcheck). Den fungerar hos vilken container-host som helst — Render, Fly,
-Railway, egen server. Sätt miljövariablerna från `.env.example`, kör
-`pnpm db:migrate` vid deploy och peka en scheduler på de tre cron-sökvägarna.
+healthcheck). Den fungerar hos vilken container-host som helst — Fly, Railway,
+egen server. Sätt miljövariablerna från `.env.example`, kör `pnpm db:migrate`
+vid deploy och peka en scheduler på de tre cron-sökvägarna.
 
 ## Testning
 

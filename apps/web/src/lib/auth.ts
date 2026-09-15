@@ -6,6 +6,7 @@ import { nextCookies } from 'better-auth/next-js';
 import { eq } from 'drizzle-orm';
 import { db } from './db.ts';
 import { env, googleEnabled } from './env.ts';
+import { canonicalizeAuthEmailUrl } from './auth-email-url.ts';
 import { sendMail } from './mail/send.ts';
 import { resetPassword, verifyEmail } from './mail/templates.ts';
 
@@ -40,6 +41,10 @@ function auth() {
     // request here. allowedHosts is the allowlist that keeps this from
     // trusting an attacker-chosen Host — better-auth documents this exact
     // `*.vercel.app` pattern for preview deployments.
+    //
+    // E-mail links are rewritten to APP_URL separately — see
+    // canonicalizeAuthEmailUrl — so auth can still work on preview hosts
+    // without shipping those hosts in password-reset mail.
     baseURL: process.env.VERCEL
       ? {
           allowedHosts: ['*.vercel.app', new URL(config.APP_URL).host],
@@ -89,7 +94,9 @@ function auth() {
       sendResetPassword: async ({ user, url }) => {
         // Delivery failures stay quiet here: a 500 would tell an attacker the
         // address exists. The mail layer already logs the failure.
-        await sendMail(resetPassword(user.email, url));
+        await sendMail(
+          resetPassword(user.email, canonicalizeAuthEmailUrl(url, config.APP_URL)),
+        );
       },
       onPasswordReset: async ({ user }) => {
         // A reset means the old password may be compromised; drop every session.
@@ -102,7 +109,9 @@ function auth() {
       autoSignInAfterVerification: true,
       expiresIn: 60 * 60 * 24,
       sendVerificationEmail: async ({ user, url }) => {
-        const result = await sendMail(verifyEmail(user.email, url));
+        const result = await sendMail(
+          verifyEmail(user.email, canonicalizeAuthEmailUrl(url, config.APP_URL)),
+        );
         // Unlike password reset, a silent failure here strands the user: the
         // form says "check your mail" and there is no resend path yet.
         // Console delivery is fine locally; production refuses to boot without

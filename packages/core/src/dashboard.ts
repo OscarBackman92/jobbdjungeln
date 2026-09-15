@@ -201,7 +201,13 @@ export function buildNextActions(
           company: row.company,
           title: row.title,
           due,
-          kind: row.deadline || (!row.applyByIsAuto && row.applyBy === due) ? 'deadline' : 'apply_by',
+          // `applyByIsAuto` defaults to "auto nudge" when omitted — only an
+          // explicit false (user-set date) or a real ad deadline is a deadline.
+          kind: row.deadline
+            ? 'deadline'
+            : row.applyByIsAuto === false
+              ? 'deadline'
+              : 'apply_by',
           overdue: daysBetween(due, today) > 0,
         });
       }

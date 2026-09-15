@@ -294,10 +294,14 @@ export function scorePosting(
 
   let score: number | null = null;
   if (mustTotal > 0) {
-    // Raw coverage — the UI shows "X av Y krav"; the percentage must match.
+    // Raw coverage — the UI shows "X av Y krav"; the percentage tracks that.
+    // Full coverage still caps below 100: a perfect score implies there is
+    // nothing left to check, which is never quite true for a real ad.
     score = Math.round((100 * mustCovered) / mustTotal);
+    if (mustCovered >= mustTotal) score = Math.min(score, 99);
   } else if (meritTotal > 0) {
     score = Math.round((100 * meritCovered) / meritTotal);
+    if (meritCovered >= meritTotal) score = Math.min(score, 99);
   }
 
   return {
