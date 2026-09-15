@@ -40,6 +40,12 @@ export async function searchJobs(
   params: SearchParams,
   { withMatch = true }: { withMatch?: boolean } = {},
 ): Promise<SearchResponse> {
+  // Count-only: JobTech `limit=0` returns total without hits — skip enrichment.
+  if ((params.limit ?? 25) === 0) {
+    const result = await jobtech().search({ ...params, limit: 0 });
+    return { total: result.total, results: [], hasResume: true };
+  }
+
   const [result, tracked, resume] = await Promise.all([
     jobtech().search(params),
     trackedAds(userId),

@@ -110,6 +110,17 @@ describe('search', () => {
     expect(result.results).toHaveLength(1);
   });
 
+  it('allows limit=0 so callers can fetch only the total', async () => {
+    const fetch = stubFetch({ total: { value: 281 }, hits: [] });
+    const client = createJobTechClient({ fetch, searchUrl: 'https://jt.test/search' });
+    const result = await client.search({ limit: 0 });
+
+    const url = new URL(String(fetch.mock.calls[0]?.[0]));
+    expect(url.searchParams.get('limit')).toBe('0');
+    expect(result.total).toBe(281);
+    expect(result.results).toHaveLength(0);
+  });
+
   it('lets municipalities override the region they sit in', async () => {
     const fetch = stubFetch({ total: { value: 0 }, hits: [] });
     const client = createJobTechClient({ fetch, searchUrl: 'https://jt.test/search' });

@@ -36,9 +36,12 @@ export async function GET(request: Request) {
         experience: experienceParam === '0' ? false : undefined,
         employmentType: url.searchParams.getAll('anstallningstyp'),
         offset: number('offset', 0),
+        // JobTech allows 0–MAX_LIMIT; 0 is a count-only request.
         limit: Math.min(number('limit', 25), MAX_LIMIT),
       },
-      { withMatch: url.searchParams.get('cv') !== '0' },
+      {
+        withMatch: number('limit', 25) !== 0 && url.searchParams.get('cv') !== '0',
+      },
     );
 
     return NextResponse.json(result, {

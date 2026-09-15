@@ -1,7 +1,7 @@
 'use client';
 
 import { pluralWord } from '@jobbdjungeln/core';
-import type { SearchSort } from '@jobbdjungeln/jobtech';
+import { regionLabel, type SearchSort } from '@jobbdjungeln/jobtech';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -10,6 +10,12 @@ import { FilterChecklist } from '@/components/jobs/filter-checklist';
 import { JobCard, type JobHit } from '@/components/jobs/job-card';
 import { SavedSearches } from '@/components/jobs/saved-searches';
 import { SearchInsight } from '@/components/jobs/search-insight';
+import {
+  EMPTY_SEARCH,
+  formatSwedishList,
+  type SearchState,
+  sameSearchState,
+} from '@/components/jobs/search-state';
 import {
   Button,
   Checkbox,
@@ -26,46 +32,29 @@ import {
   Skeleton,
 } from '@/components/ui';
 
+export type { SearchState } from '@/components/jobs/search-state';
+export { sameSearchState } from '@/components/jobs/search-state';
+
 interface TaxonomyOption {
   id: string;
   label: string;
 }
 
+interface MunicipalityOption extends TaxonomyOption {
+  regionId?: string;
+}
+
 interface Filters {
   regions: TaxonomyOption[];
   fields: TaxonomyOption[];
-  municipalities: TaxonomyOption[];
+  municipalities: MunicipalityOption[];
   groups: TaxonomyOption[];
 }
 
-export interface SearchState {
-  q: string;
-  regions: string[];
-  municipalities: string[];
-  fields: string[];
-  groups: string[];
-  remote: boolean;
-  sort: SearchSort;
-  publishedAfter: string;
-  noExperience: boolean;
-  /** Default on. `cv=0` in the URL turns CV matching off. */
-  matchCv: boolean;
-}
-
-const EMPTY: SearchState = {
-  q: '',
-  regions: [],
-  municipalities: [],
-  fields: [],
-  groups: [],
-  remote: false,
-  sort: 'pubdate-desc',
-  publishedAfter: '',
-  noExperience: false,
-  matchCv: true,
-};
+const EMPTY = EMPTY_SEARCH;
 
 const PAGE_SIZE = 20;
+const COUNT_DEBOUNCE_MS = 300;
 
 const PUBLISHED_CHIPS: ReadonlyArray<{ label: string; minutes: string }> = [
   { label: '24 timmar', minutes: String(24 * 60) },
@@ -130,6 +119,16 @@ function toApiParams(state: SearchState, offset: number): string {
   return params.toString();
 }
 
+/** Count-only query string — no CV scoring, limit=0. */
+function toCountParams(state: SearchState): string {
+  const params = toUrlParams(state);
+  if (state.sort === 'pubdate-desc') params.set('sort', 'pubdate-desc');
+  params.set('offset', '0');
+  params.set('limit', '0');
+  params.set('cv', '0');
+  return params.toString();
+}
+
 function isFiltered(state: SearchState): boolean {
   return Boolean(
     state.q ||
@@ -151,12 +150,20 @@ function todayLocal(): string {
   return `${y}-${m}-${d}`;
 }
 
+interface RegionDropNotice {
+  message: string;
+  previous: SearchState;
+}
+
 /**
  * Live search over the whole of Platsbanken.
  *
  * Opens with the newest ads (no phrase required). Narrower taxonomy picks
  * (kommun / yrkesgrupp) are sent alongside their parents so JobTech and the UI
  * stay in sync; JobTech still lets the narrower filter win when both are set.
+ *
+ * Panel edits stay in `draft` until the user presses the primary action
+ * (Visa N annonser / Sök). The result list follows `applied` from the URL.
  */
 export function SearchPanel({
   savedSearches,
@@ -195,16 +202,26 @@ export function SearchPanel({
     ),
   );
   const [urlReady, setUrlReady] = useState(false);
+  const [debouncedDraft, setDebouncedDraft] = useState(initial);
+  const [regionDropNotice, setRegionDropNotice] = useState<RegionDropNotice | null>(null);
 
   useEffect(() => {
     const next = stateFromParams(searchParams);
     setDraft(next);
     setApplied(next);
+    setDebouncedDraft(next);
+    setRegionDropNotice(null);
     setUrlReady(true);
   }, [searchParams]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedDraft(draft), COUNT_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [draft]);
+
   const regionKey = draft.regions.slice().sort().join(',');
   const fieldKey = draft.fields.slice().sort().join(',');
+  const draftDirty = !sameSearchState(draft, applied);
 
   const {
     data: filters,
@@ -234,9 +251,26 @@ export function SearchPanel({
     enabled: urlReady,
     staleTime: 60 * 60_000,
     queryFn: async () => {
-      const response = await fetch('/api/jobs?limit=1&offset=0&sort=pubdate-desc');
+      const response = await fetch('/api/jobs?limit=1&offset=0&sort=pubdate-desc&cv=0');
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Kunde inte hämta totalen.');
+      return (payload as { total: number }).total;
+    },
+  });
+
+  const {
+    data: draftCount,
+    isFetching: draftCountFetching,
+    isPending: draftCountPending,
+  } = useQuery({
+    queryKey: ['jobs-draft-count', debouncedDraft],
+    enabled: urlReady && showFilters,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/jobs?${toCountParams(debouncedDraft)}`, { signal });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Kunde inte räkna annonser.');
       return (payload as { total: number }).total;
     },
   });
@@ -274,12 +308,74 @@ export function SearchPanel({
   const searching = isFetching && !isFetchingNextPage;
   const showInitialSkeleton = searching && hits.length === 0 && !isFetched;
 
+  const countReady = typeof draftCount === 'number';
+  const draftSettled = sameSearchState(draft, debouncedDraft);
+  const counting = showFilters && (!draftSettled || draftCountPending || draftCountFetching);
+  const applyDisabled = showFilters && countReady && draftCount === 0 && draftSettled;
+  const applyLabel =
+    countReady && draftCount === 0
+      ? 'Inga annonser – ändra filtren'
+      : countReady
+        ? `Visa ${draftCount.toLocaleString('sv-SE')} ${pluralWord(draftCount, 'annons', 'annonser')}`
+        : 'Visa annonser';
+
   function apply(next: SearchState = draft) {
+    setRegionDropNotice(null);
     setDraft(next);
     setApplied(next);
+    setDebouncedDraft(next);
     const params = toUrlParams(next);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
+  function resetDraftToApplied() {
+    setDraft(applied);
+    setDebouncedDraft(applied);
+    setRegionDropNotice(null);
+  }
+
+  function clearDraftSelections() {
+    // Clears panel selections only — search phrase stays in the field.
+    setDraft({ ...EMPTY, q: draft.q });
+    setRegionDropNotice(null);
+  }
+
+  function onRegionsChange(regions: string[]) {
+    const previous = draft;
+    const regionSet = new Set(regions);
+    const removedRegions = previous.regions.filter((id) => !regionSet.has(id));
+    const options = filters?.municipalities ?? [];
+    const kept: string[] = [];
+    const removedLabels: string[] = [];
+
+    if (regions.length === 0) {
+      for (const id of previous.municipalities) {
+        const option = options.find((item) => item.id === id);
+        removedLabels.push(option?.label ?? id);
+      }
+      setDraft({ ...draft, regions, municipalities: [] });
+    } else {
+      for (const id of previous.municipalities) {
+        const option = options.find((item) => item.id === id);
+        if (option?.regionId && !regionSet.has(option.regionId)) {
+          removedLabels.push(option.label);
+        } else {
+          kept.push(id);
+        }
+      }
+      setDraft({ ...draft, regions, municipalities: kept });
+    }
+
+    if (removedLabels.length > 0 && removedRegions.length > 0) {
+      const regionNames = removedRegions.map((id) => regionLabel(id) || id).filter(Boolean);
+      setRegionDropNotice({
+        message: `${formatSwedishList(removedLabels)} togs bort eftersom ${formatSwedishList(regionNames)} avmarkerades.`,
+        previous,
+      });
+    } else {
+      setRegionDropNotice(null);
+    }
   }
 
   const municipalityOptions = filters?.municipalities ?? [];
@@ -290,6 +386,7 @@ export function SearchPanel({
       <form
         onSubmit={(event) => {
           event.preventDefault();
+          if (applyDisabled) return;
           apply();
         }}
         className="flex flex-col gap-3"
@@ -318,7 +415,7 @@ export function SearchPanel({
             <SlidersHorizontal aria-hidden />
             <span className="hidden sm:inline">Filter</span>
           </Button>
-          <Button type="submit" variant="primary">
+          <Button type="submit" variant="primary" disabled={applyDisabled}>
             Sök
           </Button>
         </div>
@@ -329,14 +426,7 @@ export function SearchPanel({
               label="Län"
               options={filters?.regions ?? []}
               selected={draft.regions}
-              onChange={(regions) =>
-                setDraft({
-                  ...draft,
-                  regions,
-                  // Parent changed — drop kommuner so we never filter on orphans.
-                  municipalities: [],
-                })
-              }
+              onChange={onRegionsChange}
               loading={filtersPending && !filters}
               emptyHint="Kunde inte ladda län."
             />
@@ -345,7 +435,10 @@ export function SearchPanel({
               label="Kommuner"
               options={municipalityOptions}
               selected={draft.municipalities}
-              onChange={(municipalities) => setDraft({ ...draft, municipalities })}
+              onChange={(municipalities) => {
+                setRegionDropNotice(null);
+                setDraft({ ...draft, municipalities });
+              }}
               disabled={draft.regions.length === 0}
               disabledHint="Välj minst ett län först — sedan kan du kryssa i flera kommuner."
               loading={municipalitiesLoading}
@@ -463,14 +556,58 @@ export function SearchPanel({
               </Label>
             </span>
 
-            <div className="flex gap-2 sm:col-span-2">
-              <Button type="submit" variant="primary" size="sm">
-                Använd filtren
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => apply(EMPTY)}>
-                <X aria-hidden />
-                Rensa
-              </Button>
+            {regionDropNotice ? (
+              <div
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[var(--radius-control)] border border-line bg-sunken px-3 py-2 text-[13px] text-ink sm:col-span-2"
+                role="status"
+                aria-live="polite"
+              >
+                <span>{regionDropNotice.message}</span>
+                <button
+                  type="button"
+                  className="font-medium text-brand-text underline-offset-2 hover:underline"
+                  onClick={() => {
+                    setDraft(regionDropNotice.previous);
+                    setDebouncedDraft(regionDropNotice.previous);
+                    setRegionDropNotice(null);
+                  }}
+                >
+                  Ångra
+                </button>
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              {draftDirty ? (
+                <p className="text-[13px] text-subtle" role="status">
+                  Ej använda ändringar
+                  {' · '}
+                  <button
+                    type="button"
+                    className="font-medium text-brand-text underline-offset-2 hover:underline"
+                    onClick={resetDraftToApplied}
+                  >
+                    Återställ
+                  </button>
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={applyDisabled}
+                  loading={counting}
+                  className="min-w-[14rem] justify-center"
+                  aria-live="polite"
+                >
+                  {applyLabel}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={clearDraftSelections}>
+                  <X aria-hidden />
+                  Rensa val
+                </Button>
+              </div>
             </div>
           </div>
         ) : null}
