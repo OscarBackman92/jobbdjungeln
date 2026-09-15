@@ -30,9 +30,11 @@ export function SavedSearches({
   searches,
   current,
   onUse,
+  hideSave = false,
 }: {
   searches: SavedSearch[];
   current: SearchState;
+  hideSave?: boolean;
   onUse: (
     state: Pick<
       SearchState,
@@ -45,14 +47,16 @@ export function SavedSearches({
   const [naming, setNaming] = useState(false);
   const [label, setLabel] = useState('');
 
-  const canSave = Boolean(
-    current.q ||
-      current.regions.length ||
-      current.municipalities.length ||
-      current.fields.length ||
-      current.groups.length ||
-      current.remote,
-  );
+  const canSave =
+    !hideSave &&
+    Boolean(
+      current.q ||
+        current.regions.length ||
+        current.municipalities.length ||
+        current.fields.length ||
+        current.groups.length ||
+        current.remote,
+    );
 
   function save() {
     startTransition(async () => {
