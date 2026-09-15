@@ -87,17 +87,6 @@ const STATUS_PROJECTION: Readonly<Record<Status, { stage: Stage; outcome: Outcom
   withdrawn: { stage: 'avslutad', outcome: 'aterkallad' },
 };
 
-/** Stages a row may move to from a given stage. Same-stage moves are always allowed. */
-const ALLOWED_STAGE_TRANSITIONS: Readonly<Record<Stage, readonly Stage[]>> = {
-  bevakad: ['sokt', 'avslutad'],
-  sokt: ['kontakt', 'intervju', 'erbjudande', 'avslutad'],
-  kontakt: ['intervju', 'erbjudande', 'avslutad'],
-  intervju: ['kontakt', 'erbjudande', 'avslutad'],
-  erbjudande: ['avslutad'],
-  // Reopening a closed row is allowed — people do get called back.
-  avslutad: ['sokt', 'kontakt', 'intervju', 'erbjudande'],
-};
-
 /** Statuses that mean the user has actually applied. */
 export const APPLIED_STATUSES: readonly Status[] = [
   'applied',
