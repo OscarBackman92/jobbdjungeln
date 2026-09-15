@@ -11,8 +11,8 @@ import {
   buildActiveFilterChips,
   countActiveFiltersExcludingQuery,
 } from '@/components/jobs/active-filter-chips';
-import { FilterChecklist } from '@/components/jobs/filter-checklist';
 import { JobCard, type JobHit } from '@/components/jobs/job-card';
+import { MultiSelectCombobox } from '@/components/jobs/multi-select-combobox';
 import { SavedSearches } from '@/components/jobs/saved-searches';
 import { SearchInsight } from '@/components/jobs/search-insight';
 import {
@@ -392,6 +392,47 @@ export function SearchPanel({
   const municipalityOptions = filters?.municipalities ?? [];
   const groupOptions = filters?.groups ?? [];
 
+  const municipalitySections = useMemo(() => {
+    const byRegion = new Map<
+      string,
+      { id: string; label: string; options: MunicipalityOption[] }
+    >();
+    for (const option of municipalityOptions) {
+      const regionId = option.regionId ?? 'okand';
+      const existing = byRegion.get(regionId);
+      if (existing) existing.options.push(option);
+      else {
+        byRegion.set(regionId, {
+          id: regionId,
+          label: regionLabel(regionId) || 'Övriga',
+          options: [option],
+        });
+      }
+    }
+    return [...byRegion.values()].sort((a, b) => a.label.localeCompare(b.label, 'sv'));
+  }, [municipalityOptions]);
+
+  const groupSections = useMemo(() => {
+    const byField = new Map<
+      string,
+      { id: string; label: string; options: Array<TaxonomyOption & { fieldId?: string }> }
+    >();
+    const fieldLabels = new Map((filters?.fields ?? []).map((item) => [item.id, item.label]));
+    for (const option of groupOptions) {
+      const fieldId = option.fieldId ?? 'okand';
+      const existing = byField.get(fieldId);
+      if (existing) existing.options.push(option);
+      else {
+        byField.set(fieldId, {
+          id: fieldId,
+          label: fieldLabels.get(fieldId) ?? 'Övriga',
+          options: [option],
+        });
+      }
+    }
+    return [...byField.values()].sort((a, b) => a.label.localeCompare(b.label, 'sv'));
+  }, [filters?.fields, groupOptions]);
+
   const activeChips = useMemo(() => {
     const municipalities = new Map(
       municipalityOptions.map((item) => [item.id, item.label] as const),
@@ -466,30 +507,32 @@ export function SearchPanel({
             id={filterPanelId}
             className="grid gap-4 rounded-[var(--radius-card)] border border-line bg-raised p-4 sm:grid-cols-2"
           >
-            <FilterChecklist
+            <MultiSelectCombobox
               label="Län"
               options={filters?.regions ?? []}
               selected={draft.regions}
               onChange={onRegionsChange}
+              searchPlaceholder="Sök län…"
               loading={filtersPending && !filters}
               emptyHint="Kunde inte ladda län."
             />
 
-            <FilterChecklist
+            <MultiSelectCombobox
               label="Kommuner"
-              options={municipalityOptions}
+              sections={municipalitySections}
               selected={draft.municipalities}
               onChange={(municipalities) => {
                 setRegionDropNotice(null);
                 setDraft({ ...draft, municipalities });
               }}
+              searchPlaceholder="Sök kommun…"
               disabled={draft.regions.length === 0}
-              disabledHint="Välj minst ett län först — sedan kan du kryssa i flera kommuner."
+              disabledPlaceholder="Välj län först"
               loading={municipalitiesLoading}
               emptyHint="Inga kommuner hittades för valt län."
             />
 
-            <FilterChecklist
+            <MultiSelectCombobox
               label="Yrkesområden"
               options={filters?.fields ?? []}
               selected={draft.fields}
@@ -500,17 +543,19 @@ export function SearchPanel({
                   groups: [],
                 })
               }
+              searchPlaceholder="Sök yrkesområde…"
               loading={filtersPending && !filters}
               emptyHint="Kunde inte ladda yrkesområden."
             />
 
-            <FilterChecklist
+            <MultiSelectCombobox
               label="Yrkesgrupper"
-              options={groupOptions}
+              sections={groupSections}
               selected={draft.groups}
               onChange={(groups) => setDraft({ ...draft, groups })}
+              searchPlaceholder="Sök yrkesgrupp…"
               disabled={draft.fields.length === 0}
-              disabledHint="Välj minst ett yrkesområde först — sedan kan du kryssa i flera grupper."
+              disabledPlaceholder="Välj yrkesområde först"
               loading={groupsLoading}
               emptyHint="Inga yrkesgrupper hittades för valt område."
             />
