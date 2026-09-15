@@ -244,7 +244,9 @@ export function JobCard({
         </div>
 
         {matchSummary ? (
-          <p className="mt-2 text-[12px] leading-snug text-muted">{matchSummary}</p>
+          <p className="mt-2 text-[12px] leading-snug text-muted sm:text-[13px]">
+            {matchSummary}
+          </p>
         ) : null}
 
         {excerpt ? (

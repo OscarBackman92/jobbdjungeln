@@ -229,6 +229,18 @@ export function SearchPanel({
         initial.publishedAfter,
     ),
   );
+
+  useEffect(() => {
+    if (!showFilters) return;
+    const mq = window.matchMedia('(max-width: 639px)');
+    if (!mq.matches) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [showFilters]);
+
   const [urlReady, setUrlReady] = useState(false);
   const [debouncedDraft, setDebouncedDraft] = useState(initial);
   const [regionDropNotice, setRegionDropNotice] = useState<RegionDropNotice | null>(null);
@@ -715,6 +727,7 @@ export function SearchPanel({
           <Button
             type="button"
             variant="secondary"
+            className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
             onClick={() => setShowFilters((value) => !value)}
             aria-expanded={showFilters}
             aria-controls={filterPanelId}
@@ -730,7 +743,12 @@ export function SearchPanel({
               {activeFilterCount > 0 ? `· ${activeFilterCount}` : null}
             </span>
           </Button>
-          <Button type="submit" variant="primary" disabled={applyDisabled}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="min-h-11 sm:min-h-0"
+            disabled={applyDisabled}
+          >
             Sök
           </Button>
         </div>
@@ -769,161 +787,196 @@ export function SearchPanel({
         {showFilters ? (
           <div
             id={filterPanelId}
-            className="grid gap-4 rounded-[var(--radius-card)] border border-line bg-raised p-4 sm:grid-cols-2"
+            className="flex flex-col rounded-[var(--radius-card)] border border-line bg-raised max-sm:fixed max-sm:inset-0 max-sm:z-50 max-sm:rounded-none max-sm:border-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Filter"
           >
-            <MultiSelectCombobox
-              label="Län"
-              options={filters?.regions ?? []}
-              selected={draft.regions}
-              onChange={onRegionsChange}
-              searchPlaceholder="Sök län…"
-              loading={filtersPending && !filters}
-              emptyHint="Kunde inte ladda län."
-            />
-
-            <MultiSelectCombobox
-              label="Kommuner"
-              sections={municipalitySections}
-              selected={draft.municipalities}
-              onChange={(municipalities) => {
-                setRegionDropNotice(null);
-                setDraft({ ...draft, municipalities });
-              }}
-              searchPlaceholder="Sök kommun…"
-              disabled={draft.regions.length === 0}
-              disabledPlaceholder="Välj län först"
-              loading={municipalitiesLoading}
-              emptyHint="Inga kommuner hittades för valt län."
-            />
-
-            <MultiSelectCombobox
-              label="Yrkesområden"
-              options={filters?.fields ?? []}
-              selected={draft.fields}
-              onChange={(fields) =>
-                setDraft({
-                  ...draft,
-                  fields,
-                  groups: [],
-                })
-              }
-              searchPlaceholder="Sök yrkesområde…"
-              loading={filtersPending && !filters}
-              emptyHint="Kunde inte ladda yrkesområden."
-            />
-
-            <MultiSelectCombobox
-              label="Yrkesgrupper"
-              sections={groupSections}
-              selected={draft.groups}
-              onChange={(groups) => setDraft({ ...draft, groups })}
-              searchPlaceholder="Sök yrkesgrupp…"
-              disabled={draft.fields.length === 0}
-              disabledPlaceholder="Välj yrkesområde först"
-              loading={groupsLoading}
-              emptyHint="Inga yrkesgrupper hittades för valt område."
-            />
-
-            <div className="flex flex-col gap-2 sm:col-span-2">
-              <span className="text-[13px] font-medium text-ink">Publicerad</span>
-              <div className="flex flex-wrap gap-2">
+            <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2 sm:col-span-2 sm:border-0 sm:p-0">
+              <p className="text-sm font-semibold text-ink sm:hidden">Filter</p>
+              <div className="ml-auto flex items-center gap-1 sm:hidden">
                 <Button
                   type="button"
-                  size="sm"
-                  variant={draft.publishedAfter === '' ? 'secondary' : 'ghost'}
-                  onClick={() => setDraft({ ...draft, publishedAfter: '' })}
+                  variant="ghost"
+                  className="min-h-11 px-3"
+                  onClick={clearDraftSelections}
                 >
-                  Alla
+                  Rensa val
                 </Button>
-                {PUBLISHED_CHIPS.map((chip) => (
-                  <Button
-                    key={chip.minutes}
-                    type="button"
-                    size="sm"
-                    variant={draft.publishedAfter === chip.minutes ? 'secondary' : 'ghost'}
-                    onClick={() => setDraft({ ...draft, publishedAfter: chip.minutes })}
-                  >
-                    {chip.label}
-                  </Button>
-                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-11"
+                  aria-label="Stäng"
+                  onClick={() => setShowFilters(false)}
+                >
+                  <X aria-hidden />
+                </Button>
               </div>
             </div>
 
-            <span className="flex items-center gap-2">
-              <Checkbox
-                id={remoteId}
-                checked={draft.remote}
-                onCheckedChange={(value) => setDraft({ ...draft, remote: value === true })}
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 sm:contents sm:overflow-visible sm:p-0">
+              <MultiSelectCombobox
+                label="Län"
+                options={filters?.regions ?? []}
+                selected={draft.regions}
+                onChange={onRegionsChange}
+                searchPlaceholder="Sök län…"
+                loading={filtersPending && !filters}
+                emptyHint="Kunde inte ladda län."
               />
-              <Label htmlFor={remoteId} className="font-normal">
-                Endast jobb på distans
-              </Label>
-            </span>
 
-            <span className="flex items-center gap-2">
-              <Checkbox
-                id={experienceId}
-                checked={draft.noExperience}
-                onCheckedChange={(value) =>
-                  setDraft({ ...draft, noExperience: value === true })
+              <MultiSelectCombobox
+                label="Kommuner"
+                sections={municipalitySections}
+                selected={draft.municipalities}
+                onChange={(municipalities) => {
+                  setRegionDropNotice(null);
+                  setDraft({ ...draft, municipalities });
+                }}
+                searchPlaceholder="Sök kommun…"
+                disabled={draft.regions.length === 0}
+                disabledPlaceholder="Välj län först"
+                loading={municipalitiesLoading}
+                emptyHint="Inga kommuner hittades för valt län."
+              />
+
+              <MultiSelectCombobox
+                label="Yrkesområden"
+                options={filters?.fields ?? []}
+                selected={draft.fields}
+                onChange={(fields) =>
+                  setDraft({
+                    ...draft,
+                    fields,
+                    groups: [],
+                  })
                 }
+                searchPlaceholder="Sök yrkesområde…"
+                loading={filtersPending && !filters}
+                emptyHint="Kunde inte ladda yrkesområden."
               />
-              <Label htmlFor={experienceId} className="font-normal">
-                Utan krav på erfarenhet
-              </Label>
-            </span>
 
-            {regionDropNotice ? (
-              <div
-                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[var(--radius-control)] border border-line bg-sunken px-3 py-2 text-[13px] text-ink sm:col-span-2"
-                role="status"
-                aria-live="polite"
-              >
-                <span>{regionDropNotice.message}</span>
-                <button
-                  type="button"
-                  className="font-medium text-brand-text underline-offset-2 hover:underline"
-                  onClick={() => {
-                    setDraft(regionDropNotice.previous);
-                    setDebouncedDraft(regionDropNotice.previous);
-                    setRegionDropNotice(null);
-                  }}
-                >
-                  Ångra
-                </button>
+              <MultiSelectCombobox
+                label="Yrkesgrupper"
+                sections={groupSections}
+                selected={draft.groups}
+                onChange={(groups) => setDraft({ ...draft, groups })}
+                searchPlaceholder="Sök yrkesgrupp…"
+                disabled={draft.fields.length === 0}
+                disabledPlaceholder="Välj yrkesområde först"
+                loading={groupsLoading}
+                emptyHint="Inga yrkesgrupper hittades för valt område."
+              />
+
+              <div className="flex flex-col gap-2 sm:col-span-2">
+                <span className="text-[13px] font-medium text-ink">Publicerad</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="min-h-11 sm:min-h-8"
+                    variant={draft.publishedAfter === '' ? 'secondary' : 'ghost'}
+                    onClick={() => setDraft({ ...draft, publishedAfter: '' })}
+                  >
+                    Alla
+                  </Button>
+                  {PUBLISHED_CHIPS.map((chip) => (
+                    <Button
+                      key={chip.minutes}
+                      type="button"
+                      size="sm"
+                      className="min-h-11 sm:min-h-8"
+                      variant={draft.publishedAfter === chip.minutes ? 'secondary' : 'ghost'}
+                      onClick={() => setDraft({ ...draft, publishedAfter: chip.minutes })}
+                    >
+                      {chip.label}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            ) : null}
 
-            <div className="flex flex-col gap-2 sm:col-span-2">
-              {draftDirty ? (
-                <p className="text-[13px] text-subtle" role="status">
-                  Ej använda ändringar
-                  {' · '}
+              <span className="flex items-center gap-2">
+                <Checkbox
+                  id={remoteId}
+                  checked={draft.remote}
+                  onCheckedChange={(value) => setDraft({ ...draft, remote: value === true })}
+                />
+                <Label htmlFor={remoteId} className="font-normal">
+                  Endast jobb på distans
+                </Label>
+              </span>
+
+              <span className="flex items-center gap-2">
+                <Checkbox
+                  id={experienceId}
+                  checked={draft.noExperience}
+                  onCheckedChange={(value) =>
+                    setDraft({ ...draft, noExperience: value === true })
+                  }
+                />
+                <Label htmlFor={experienceId} className="font-normal">
+                  Utan krav på erfarenhet
+                </Label>
+              </span>
+
+              {regionDropNotice ? (
+                <div
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[var(--radius-control)] border border-line bg-sunken px-3 py-2 text-[13px] text-ink sm:col-span-2"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span>{regionDropNotice.message}</span>
                   <button
                     type="button"
                     className="font-medium text-brand-text underline-offset-2 hover:underline"
-                    onClick={resetDraftToApplied}
+                    onClick={() => {
+                      setDraft(regionDropNotice.previous);
+                      setDebouncedDraft(regionDropNotice.previous);
+                      setRegionDropNotice(null);
+                    }}
                   >
-                    Återställ
+                    Ångra
                   </button>
-                </p>
+                </div>
               ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={applyDisabled}
-                  loading={counting}
-                  className="min-w-[14rem] justify-center"
-                  aria-live="polite"
-                >
-                  {applyLabel}
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={clearDraftSelections}>
-                  <X aria-hidden />
-                  Rensa val
-                </Button>
+
+              <div className="flex flex-col gap-2 border-t border-line bg-raised p-3 max-sm:sticky max-sm:bottom-0 sm:col-span-2 sm:border-0 sm:bg-transparent sm:p-0">
+                {draftDirty ? (
+                  <p className="text-[13px] text-subtle" role="status">
+                    Ej använda ändringar
+                    {' · '}
+                    <button
+                      type="button"
+                      className="font-medium text-brand-text underline-offset-2 hover:underline"
+                      onClick={resetDraftToApplied}
+                    >
+                      Återställ
+                    </button>
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    className="min-h-11 min-w-[14rem] flex-1 justify-center sm:min-h-8 sm:flex-none"
+                    disabled={applyDisabled}
+                    loading={counting}
+                    aria-live="polite"
+                  >
+                    {applyLabel}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="hidden min-h-11 sm:inline-flex sm:min-h-8"
+                    onClick={clearDraftSelections}
+                  >
+                    <X aria-hidden />
+                    Rensa val
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
