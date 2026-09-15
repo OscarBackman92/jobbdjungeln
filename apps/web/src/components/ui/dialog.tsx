@@ -18,6 +18,7 @@ export function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in data-[state=closed]:fade-out" />
       <DialogPrimitive.Content
+        aria-modal="true"
         className={cn(
           // Full height on a phone, a centred sheet from `sm` up.
           // overflow-hidden + max-h keeps the sheet bounded so DialogBody

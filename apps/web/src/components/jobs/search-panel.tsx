@@ -51,6 +51,7 @@ import {
   Skeleton,
   Switch,
 } from '@/components/ui';
+import { cn } from '@/lib/utils';
 
 export type { SearchState } from '@/components/jobs/search-state';
 export { sameSearchState } from '@/components/jobs/search-state';
@@ -871,29 +872,45 @@ export function SearchPanel({
               />
 
               <div className="flex flex-col gap-2 sm:col-span-2">
-                <span className="text-[13px] font-medium text-ink">Publicerad</span>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="min-h-11 sm:min-h-8"
-                    variant={draft.publishedAfter === '' ? 'secondary' : 'ghost'}
-                    onClick={() => setDraft({ ...draft, publishedAfter: '' })}
-                  >
-                    Alla
-                  </Button>
-                  {PUBLISHED_CHIPS.map((chip) => (
-                    <Button
-                      key={chip.minutes}
-                      type="button"
-                      size="sm"
-                      className="min-h-11 sm:min-h-8"
-                      variant={draft.publishedAfter === chip.minutes ? 'secondary' : 'ghost'}
-                      onClick={() => setDraft({ ...draft, publishedAfter: chip.minutes })}
-                    >
-                      {chip.label}
-                    </Button>
-                  ))}
+                <span
+                  id={`${filterPanelId}-published`}
+                  className="text-[13px] font-medium text-ink"
+                >
+                  Publicerad
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-labelledby={`${filterPanelId}-published`}
+                  className="inline-flex flex-wrap gap-1 rounded-[var(--radius-control)] bg-sunken p-1"
+                >
+                  {([{ label: 'Alla datum', minutes: '' }, ...PUBLISHED_CHIPS] as const).map(
+                    (chip) => {
+                      const selected = draft.publishedAfter === chip.minutes;
+                      return (
+                        <label
+                          key={chip.label}
+                          className={cn(
+                            'relative inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md px-3 text-[13px] font-medium transition-colors sm:min-h-8',
+                            selected
+                              ? 'bg-brand-soft text-brand-text shadow-card'
+                              : 'text-muted hover:bg-hover hover:text-ink',
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name={`${filterPanelId}-published-radio`}
+                            value={chip.minutes}
+                            checked={selected}
+                            onChange={() =>
+                              setDraft({ ...draft, publishedAfter: chip.minutes })
+                            }
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                          />
+                          {chip.label}
+                        </label>
+                      );
+                    },
+                  )}
                 </div>
               </div>
 
@@ -1177,8 +1194,11 @@ export function SearchPanel({
                   disabled={isFetchingNextPage}
                   loading={isFetchingNextPage}
                   className="self-center"
+                  aria-live="polite"
                 >
-                  {`Visa ${PAGE_SIZE} till (${hits.length.toLocaleString('sv-SE')} av ${total.toLocaleString('sv-SE')})`}
+                  {isFetchingNextPage
+                    ? 'Laddar fler annonser…'
+                    : `Visa ${PAGE_SIZE} till (${hits.length.toLocaleString('sv-SE')} av ${total.toLocaleString('sv-SE')})`}
                 </Button>
               ) : hits.length > 0 ? (
                 <p className="self-center text-[13px] text-subtle">
