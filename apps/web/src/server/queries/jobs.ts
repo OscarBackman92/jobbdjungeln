@@ -7,7 +7,7 @@ import {
   trimSnapshot,
 } from '@jobbdjungeln/core';
 import { schema } from '@jobbdjungeln/db';
-import type { JobAd, SearchParams, SearchSort } from '@jobbdjungeln/jobtech';
+import type { JobAd, SearchParams, SearchSort, SearchStatBucket } from '@jobbdjungeln/jobtech';
 import { eq } from 'drizzle-orm';
 import { compareCvMatch } from '@/components/jobs/match-badge-logic';
 import { db } from '@/lib/db';
@@ -39,6 +39,8 @@ export interface SearchResponse {
   hasResume: boolean;
   /** True when CV sort scored only the newest 100 of a larger result set. */
   cvSortCapped?: boolean;
+  /** Facet buckets for the full result set (when requested). */
+  stats?: SearchStatBucket[];
 }
 
 export type JobSearchParams = Omit<SearchParams, 'sort'> & {
@@ -86,12 +88,17 @@ export async function searchJobs(
   params: JobSearchParams,
   { withMatch = true }: { withMatch?: boolean } = {},
 ): Promise<SearchResponse> {
-  // Count-only: JobTech `limit=0` returns total without hits — skip enrichment.
+  // Count-only: JobTech `limit=0` returns total (and optional stats) without hits.
   if ((params.limit ?? 25) === 0) {
     const sort =
       params.sort === 'cv-match' ? 'pubdate-desc' : (params.sort as SearchSort | undefined);
     const result = await jobtech().search({ ...params, sort, limit: 0 });
-    return { total: result.total, results: [], hasResume: true };
+    return {
+      total: result.total,
+      results: [],
+      hasResume: true,
+      stats: result.stats,
+    };
   }
 
   const [tracked, resume] = await Promise.all([
@@ -105,7 +112,8 @@ export async function searchJobs(
   const cvSort = params.sort === 'cv-match';
 
   if (cvSort) {
-    const pool = await fetchNewestPool(params);
+    const { sort: _ignored, ...poolParams } = params;
+    const pool = await fetchNewestPool(poolParams);
     const enriched = enrichAds(pool.results, trackedByKey, skills, withMatch, hasResume);
     enriched.sort(compareCvMatch);
     const offset = params.offset ?? 0;
