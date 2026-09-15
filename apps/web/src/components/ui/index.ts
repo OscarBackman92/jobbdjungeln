@@ -8,6 +8,7 @@ export {
   CardHeader,
   CardTitle,
 } from './card.tsx';
+export { ConfirmDialog } from './confirm-dialog.tsx';
 export {
   Dialog,
   DialogBody,
@@ -34,6 +35,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './misc.tsx';
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './popover.tsx';
 export {
   Select,
   SelectContent,
@@ -43,4 +45,3 @@ export {
   SelectTrigger,
   SelectValue,
 } from './select.tsx';
-export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './popover.tsx';

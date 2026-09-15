@@ -14,6 +14,7 @@ import {
   MapPin,
   Send,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type { JobHit } from '@/components/jobs/job-card';
@@ -133,6 +134,7 @@ export function JobAdDialog({
   savedId: string | null;
   onSavedIdChange: (id: string | null) => void;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [activeSnippet, setActiveSnippet] = useState<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -149,21 +151,62 @@ export function JobAdDialog({
     if (!open) setActiveSnippet(null);
   }, [open]);
 
+  function savePayload() {
+    return {
+      company: job.companyName,
+      title: job.title,
+      location: job.location,
+      status: 'wishlist' as const,
+      source: 'platsbanken' as const,
+      adUrl: job.webpageUrl,
+      applyUrl: job.applicationUrl,
+      adDescription: job.description,
+      sourceJobId: job.id,
+      deadline: job.applicationDeadline ?? '',
+      occupationConceptId: job.occupationConceptId,
+      occupationLabel: job.occupationLabel,
+      occupationGroupLabel: job.occupationGroupLabel,
+      workingHoursType: job.workingHoursType,
+      scopeOfWorkMin: job.scopeOfWorkMin,
+      scopeOfWorkMax: job.scopeOfWorkMax,
+    };
+  }
+
   function toggleSave() {
-    if (savedId) {
-      if (!confirm('Ta bort sparningen? Jobbet försvinner från Sparade jobb.')) return;
+    if (savedId && savedId !== 'pending') {
+      const previousId = savedId;
+      const payload = savePayload();
+      onSavedIdChange(null);
       startTransition(async () => {
-        const result = await deleteApplicationAction(savedId);
-        if (result.ok) {
-          onSavedIdChange(null);
-          toast.success('Borttagen från Sparade jobb');
-        } else {
+        const result = await deleteApplicationAction(previousId);
+        if (!result.ok) {
+          onSavedIdChange(previousId);
           toast.error(result.error);
+          return;
         }
+        toast('Borttaget från Sparade', {
+          duration: 8000,
+          action: {
+            label: 'Ångra',
+            onClick: () => {
+              startTransition(async () => {
+                const restored = await createApplicationAction(payload);
+                if (restored.ok) {
+                  onSavedIdChange(restored.data.id);
+                  router.refresh();
+                } else {
+                  toast.error(restored.error);
+                }
+              });
+            },
+          },
+        });
+        router.refresh();
       });
       return;
     }
 
+    onSavedIdChange('pending');
     startTransition(async () => {
       const similar = await findSimilarAction({
         company: job.companyName,
@@ -173,31 +216,35 @@ export function JobAdDialog({
       if (similar.ok && similar.data.length > 0) {
         toast.message(`Du har redan ${similar.data[0]?.company}: ${similar.data[0]?.title}.`);
       }
-      const result = await createApplicationAction({
-        company: job.companyName,
-        title: job.title,
-        location: job.location,
-        status: 'wishlist',
-        source: 'platsbanken',
-        adUrl: job.webpageUrl,
-        applyUrl: job.applicationUrl,
-        adDescription: job.description,
-        sourceJobId: job.id,
-        deadline: job.applicationDeadline ?? '',
-        occupationConceptId: job.occupationConceptId,
-        occupationLabel: job.occupationLabel,
-        occupationGroupLabel: job.occupationGroupLabel,
-        workingHoursType: job.workingHoursType,
-        scopeOfWorkMin: job.scopeOfWorkMin,
-        scopeOfWorkMax: job.scopeOfWorkMax,
-      });
-
-      if (result.ok) {
-        onSavedIdChange(result.data.id);
-        toast.success('Sparad under Sparade jobb');
-      } else {
+      const result = await createApplicationAction(savePayload());
+      if (!result.ok) {
+        onSavedIdChange(null);
         toast.error(result.error);
+        return;
       }
+      onSavedIdChange(result.data.id);
+      toast('Sparat', {
+        duration: 8000,
+        action: {
+          label: 'Öppna',
+          onClick: () => router.push('/sparade'),
+        },
+        cancel: {
+          label: 'Ångra',
+          onClick: () => {
+            startTransition(async () => {
+              const undone = await deleteApplicationAction(result.data.id);
+              if (undone.ok) {
+                onSavedIdChange(null);
+                router.refresh();
+              } else {
+                toast.error(undone.error);
+              }
+            });
+          },
+        },
+      });
+      router.refresh();
     });
   }
 

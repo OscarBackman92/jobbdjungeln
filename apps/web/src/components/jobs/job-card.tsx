@@ -11,12 +11,12 @@ import {
   Bookmark,
   BookmarkCheck,
   Building2,
-  Check,
   ExternalLink,
   FileText,
   MapPin,
   Send,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { JobAdDialog } from '@/components/jobs/job-ad-dialog';
@@ -83,6 +83,7 @@ export function JobCard({
   /** Optional ref target for focusing the first newly loaded card. */
   headingRef?: (node: HTMLButtonElement | null) => void;
 }) {
+  const router = useRouter();
   const [savedId, setSavedId] = useState<string | null>(job.trackedApplicationId);
   const [reading, setReading] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -95,21 +96,62 @@ export function JobCard({
   const deadline = formatDeadlineDisplay(job.applicationDeadline);
   const published = formatPublishedDisplay(job.publishedAt);
 
+  function savePayload() {
+    return {
+      company: job.companyName,
+      title: job.title,
+      location: job.location,
+      status: 'wishlist' as const,
+      source: 'platsbanken' as const,
+      adUrl: job.webpageUrl,
+      applyUrl: job.applicationUrl,
+      adDescription: job.description,
+      sourceJobId: job.id,
+      deadline: job.applicationDeadline ?? '',
+      occupationConceptId: job.occupationConceptId,
+      occupationLabel: job.occupationLabel,
+      occupationGroupLabel: job.occupationGroupLabel,
+      workingHoursType: job.workingHoursType,
+      scopeOfWorkMin: job.scopeOfWorkMin,
+      scopeOfWorkMax: job.scopeOfWorkMax,
+    };
+  }
+
   function toggleSave() {
     if (savedId) {
-      if (!confirm('Ta bort sparningen? Jobbet försvinner från Sparade jobb.')) return;
+      const previousId = savedId;
+      const payload = savePayload();
+      setSavedId(null);
       startTransition(async () => {
-        const result = await deleteApplicationAction(savedId);
-        if (result.ok) {
-          setSavedId(null);
-          toast.success('Borttagen från Sparade jobb');
-        } else {
+        const result = await deleteApplicationAction(previousId);
+        if (!result.ok) {
+          setSavedId(previousId);
           toast.error(result.error);
+          return;
         }
+        toast('Borttaget från Sparade', {
+          duration: 8000,
+          action: {
+            label: 'Ångra',
+            onClick: () => {
+              startTransition(async () => {
+                const restored = await createApplicationAction(payload);
+                if (restored.ok) {
+                  setSavedId(restored.data.id);
+                  router.refresh();
+                } else {
+                  toast.error(restored.error);
+                }
+              });
+            },
+          },
+        });
+        router.refresh();
       });
       return;
     }
 
+    setSavedId('pending');
     startTransition(async () => {
       const similar = await findSimilarAction({
         company: job.companyName,
@@ -119,31 +161,35 @@ export function JobCard({
       if (similar.ok && similar.data.length > 0) {
         toast.message(`Du har redan ${similar.data[0]?.company}: ${similar.data[0]?.title}.`);
       }
-      const result = await createApplicationAction({
-        company: job.companyName,
-        title: job.title,
-        location: job.location,
-        status: 'wishlist',
-        source: 'platsbanken',
-        adUrl: job.webpageUrl,
-        applyUrl: job.applicationUrl,
-        adDescription: job.description,
-        sourceJobId: job.id,
-        deadline: job.applicationDeadline ?? '',
-        occupationConceptId: job.occupationConceptId,
-        occupationLabel: job.occupationLabel,
-        occupationGroupLabel: job.occupationGroupLabel,
-        workingHoursType: job.workingHoursType,
-        scopeOfWorkMin: job.scopeOfWorkMin,
-        scopeOfWorkMax: job.scopeOfWorkMax,
-      });
-
-      if (result.ok) {
-        setSavedId(result.data.id);
-        toast.success('Sparad under Sparade jobb');
-      } else {
+      const result = await createApplicationAction(savePayload());
+      if (!result.ok) {
+        setSavedId(null);
         toast.error(result.error);
+        return;
       }
+      setSavedId(result.data.id);
+      toast('Sparat', {
+        duration: 8000,
+        action: {
+          label: 'Öppna',
+          onClick: () => router.push('/sparade'),
+        },
+        cancel: {
+          label: 'Ångra',
+          onClick: () => {
+            startTransition(async () => {
+              const undone = await deleteApplicationAction(result.data.id);
+              if (undone.ok) {
+                setSavedId(null);
+                router.refresh();
+              } else {
+                toast.error(undone.error);
+              }
+            });
+          },
+        },
+      });
+      router.refresh();
     });
   }
 
@@ -232,13 +278,6 @@ export function JobCard({
             </Button>
           ) : null}
         </div>
-
-        {saved && !job.alreadyTracked ? (
-          <p className="mt-2 inline-flex items-center gap-1 text-[13px] text-positive-text">
-            <Check className="size-3.5" aria-hidden />
-            Ligger under Sparade jobb — öppna där om du vill fylla i detaljer.
-          </p>
-        ) : null}
       </Card>
 
       <JobAdDialog

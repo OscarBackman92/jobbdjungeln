@@ -1,5 +1,6 @@
 'use client';
 
+import { pluralWord } from '@jobbdjungeln/core';
 import {
   Bookmark,
   ClipboardList,
@@ -50,6 +51,11 @@ export function SidebarNav({ badges }: { badges?: Partial<Record<NavItem['href']
             href={href}
             prefetch={false}
             aria-current={active ? 'page' : undefined}
+            aria-label={
+              href === '/sparade' && badge
+                ? `${label}, ${badge} ${pluralWord(badge, 'sparat jobb', 'sparade jobb')} har sista dag idag eller imorgon`
+                : undefined
+            }
             className={cn(
               'group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm font-medium transition-colors',
               active
@@ -60,7 +66,14 @@ export function SidebarNav({ badges }: { badges?: Partial<Record<NavItem['href']
             <Icon className="size-4 shrink-0" aria-hidden />
             <span className="flex-1">{label}</span>
             {badge ? (
-              <span className="rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-text">
+              <span
+                className="rounded-full bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning-text"
+                title={
+                  href === '/sparade'
+                    ? `${badge} ${pluralWord(badge, 'sparat jobb', 'sparade jobb')} har sista dag idag eller imorgon`
+                    : undefined
+                }
+              >
                 {badge}
               </span>
             ) : null}
@@ -96,6 +109,13 @@ export function MobileNav({ badges }: { badges?: Partial<Record<NavItem['href'],
                 href={href}
                 prefetch={false}
                 aria-current={active ? 'page' : undefined}
+                aria-label={
+                  href === '/sparade' && badge
+                    ? `${label}, ${badge} ${pluralWord(badge, 'sparat jobb', 'sparade jobb')} har sista dag idag eller imorgon`
+                    : badge
+                      ? `${label}, ${badge} behöver uppmärksamhet`
+                      : undefined
+                }
                 className={cn(
                   'relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[10px] leading-tight font-medium transition-colors',
                   active ? 'text-brand-text' : 'text-subtle',
@@ -104,9 +124,16 @@ export function MobileNav({ badges }: { badges?: Partial<Record<NavItem['href'],
                 <span className="relative">
                   <Icon className="size-5" aria-hidden />
                   {badge ? (
-                    <span className="absolute -top-1 -right-2 min-w-4 rounded-full bg-warning px-1 text-[10px] leading-4 font-semibold text-white">
+                    <span
+                      className="absolute -top-1 -right-2 min-w-4 rounded-full bg-warning px-1 text-[10px] leading-4 font-semibold text-white"
+                      title={
+                        href === '/sparade'
+                          ? `${badge} ${pluralWord(badge, 'sparat jobb', 'sparade jobb')} har sista dag idag eller imorgon`
+                          : undefined
+                      }
+                      aria-hidden
+                    >
                       {badge}
-                      <span className="sr-only"> behöver uppmärksamhet</span>
                     </span>
                   ) : null}
                 </span>

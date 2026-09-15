@@ -14,7 +14,7 @@ import {
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { SalaryClaimDialog } from '@/components/board/salary-claim-dialog';
-import { Button, Input } from '@/components/ui';
+import { Button, ConfirmDialog, Input } from '@/components/ui';
 import { bulkAction } from '@/server/actions/applications';
 
 /**
@@ -35,6 +35,7 @@ export function BulkBar({
   const [pending, startTransition] = useTransition();
   const [askSalary, setAskSalary] = useState(false);
   const [applyBy, setApplyBy] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (selected.length === 0) return null;
 
@@ -117,10 +118,7 @@ export function BulkBar({
           size="sm"
           variant="danger"
           disabled={pending}
-          onClick={() => {
-            if (confirm(`Ta bort ${plural(selected.length, 'rad', 'rader')} permanent?`))
-              run('delete');
-          }}
+          onClick={() => setConfirmDelete(true)}
         >
           <Trash2 aria-hidden />
           Ta bort
@@ -136,6 +134,18 @@ export function BulkBar({
         pending={pending}
         onOpenChange={setAskSalary}
         onSubmit={(claim) => run('mark_applied', { salaryClaim: claim })}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Ta bort ${plural(selected.length, 'rad', 'rader')} permanent?`}
+        description="Det går inte att ångra. Markerade rader och deras historik försvinner."
+        confirmLabel="Ta bort permanent"
+        pending={pending}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          run('delete');
+        }}
       />
     </>
   );
