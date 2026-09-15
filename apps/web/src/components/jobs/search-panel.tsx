@@ -6,6 +6,11 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-qu
 import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useMemo, useState } from 'react';
+import {
+  ActiveFilterChips,
+  buildActiveFilterChips,
+  countActiveFiltersExcludingQuery,
+} from '@/components/jobs/active-filter-chips';
 import { FilterChecklist } from '@/components/jobs/filter-checklist';
 import { JobCard, type JobHit } from '@/components/jobs/job-card';
 import { SavedSearches } from '@/components/jobs/saved-searches';
@@ -48,7 +53,7 @@ interface Filters {
   regions: TaxonomyOption[];
   fields: TaxonomyOption[];
   municipalities: MunicipalityOption[];
-  groups: TaxonomyOption[];
+  groups: Array<TaxonomyOption & { fieldId?: string }>;
 }
 
 const EMPTY = EMPTY_SEARCH;
@@ -219,9 +224,11 @@ export function SearchPanel({
     return () => window.clearTimeout(timer);
   }, [draft]);
 
-  const regionKey = draft.regions.slice().sort().join(',');
-  const fieldKey = draft.fields.slice().sort().join(',');
+  const regionKey = [...draft.regions, ...applied.regions].sort().join(',');
+  const fieldKey = [...draft.fields, ...applied.fields].sort().join(',');
   const draftDirty = !sameSearchState(draft, applied);
+  const filterPanelId = 'annonser-filter-panel';
+  const activeFilterCount = countActiveFiltersExcludingQuery(applied);
 
   const {
     data: filters,
@@ -231,8 +238,12 @@ export function SearchPanel({
     queryKey: ['job-filters', regionKey, fieldKey],
     queryFn: async () => {
       const params = new URLSearchParams();
-      for (const id of draft.regions) params.append('region', id);
-      for (const id of draft.fields) params.append('omrade', id);
+      for (const id of unique([...draft.regions, ...applied.regions])) {
+        params.append('region', id);
+      }
+      for (const id of unique([...draft.fields, ...applied.fields])) {
+        params.append('omrade', id);
+      }
       const response = await fetch(`/api/jobs/filters?${params}`);
       if (!response.ok) throw new Error('Kunde inte hämta filtren.');
       return response.json();
@@ -246,7 +257,7 @@ export function SearchPanel({
 
   const filtered = isFiltered(applied);
 
-  const { data: baseline, isFetching: baselineFetching } = useQuery({
+  const { data: baseline } = useQuery({
     queryKey: ['jobs-baseline-total'],
     enabled: urlReady,
     staleTime: 60 * 60_000,
@@ -381,6 +392,19 @@ export function SearchPanel({
   const municipalityOptions = filters?.municipalities ?? [];
   const groupOptions = filters?.groups ?? [];
 
+  const activeChips = useMemo(() => {
+    const municipalities = new Map(
+      municipalityOptions.map((item) => [item.id, item.label] as const),
+    );
+    const groups = new Map(groupOptions.map((item) => [item.id, item.label] as const));
+    const groupFields = new Map(
+      groupOptions
+        .filter((item): item is TaxonomyOption & { fieldId: string } => Boolean(item.fieldId))
+        .map((item) => [item.id, item.fieldId] as const),
+    );
+    return buildActiveFilterChips(applied, { municipalities, groups, groupFields });
+  }, [applied, municipalityOptions, groupOptions]);
+
   return (
     <div className="flex flex-col gap-4">
       <form
@@ -410,18 +434,38 @@ export function SearchPanel({
             variant="secondary"
             onClick={() => setShowFilters((value) => !value)}
             aria-expanded={showFilters}
-            aria-label="Filter"
+            aria-controls={filterPanelId}
+            aria-label={
+              activeFilterCount > 0 ? `Filter, ${activeFilterCount} aktiva` : 'Filter'
+            }
           >
             <SlidersHorizontal aria-hidden />
-            <span className="hidden sm:inline">Filter</span>
+            <span className="hidden sm:inline">
+              {activeFilterCount > 0 ? `Filter · ${activeFilterCount}` : 'Filter'}
+            </span>
+            <span className="sm:hidden">
+              {activeFilterCount > 0 ? `· ${activeFilterCount}` : null}
+            </span>
           </Button>
           <Button type="submit" variant="primary" disabled={applyDisabled}>
             Sök
           </Button>
         </div>
 
+        <ActiveFilterChips
+          chips={activeChips}
+          onRemove={(chip) => apply(chip.remove(applied))}
+          onClearAll={() =>
+            apply({ ...EMPTY, q: '', sort: applied.sort, matchCv: applied.matchCv })
+          }
+          onExpand={() => setShowFilters(true)}
+        />
+
         {showFilters ? (
-          <div className="grid gap-4 rounded-[var(--radius-card)] border border-line bg-raised p-4 sm:grid-cols-2">
+          <div
+            id={filterPanelId}
+            className="grid gap-4 rounded-[var(--radius-card)] border border-line bg-raised p-4 sm:grid-cols-2"
+          >
             <FilterChecklist
               label="Län"
               options={filters?.regions ?? []}
@@ -662,15 +706,12 @@ export function SearchPanel({
       ) : (
         <>
           <p className="text-[13px] text-subtle" aria-live="polite">
-            {filtered && typeof baseline === 'number' ? (
+            {filtered ? (
               <>
                 <span className="font-medium text-ink tabular-nums">
                   {total.toLocaleString('sv-SE')}
                 </span>
-                {' av '}
-                <span className="tabular-nums">{baseline.toLocaleString('sv-SE')}</span>
-                {' annonser i Platsbanken'}
-                {baselineFetching ? ' …' : ''}
+                {` ${pluralWord(total, 'annons', 'annonser')} matchar dina filter`}
               </>
             ) : (
               <>
