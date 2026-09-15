@@ -43,6 +43,7 @@ export default async function ProfilePage({
                 education: resume?.education ?? [],
                 jobProfiles: resume?.jobProfiles ?? [],
               }}
+              accountFirstName={user.name?.split(/\s+/)[0] ?? ''}
             />
           }
           account={

@@ -272,7 +272,7 @@ export const resumes = pgTable('resumes', {
   skills: jsonb().$type<string[]>().notNull().default([]),
   experience: jsonb().$type<ResumeExperience[]>().notNull().default([]),
   education: jsonb().$type<ResumeEducation[]>().notNull().default([]),
-  /** Named skill sets — "Ekonomi", "IT-support" — scored separately. */
+  /** Named selections from the flat skill list — "Ekonomi", "IT-support". */
   jobProfiles: jsonb().$type<JobProfile[]>().notNull().default([]),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -299,8 +299,9 @@ export interface ResumeEducation {
 export interface JobProfile {
   id: string;
   label: string;
+  /** Selected skills from the flat CV list. */
   skills: string[];
-  /** Skills the user has explicitly confirmed they can back up. */
+  /** Skills the user can back up; defaults to the full selection. */
   confirmed: string[];
 }
 
