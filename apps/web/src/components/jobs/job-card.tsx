@@ -16,6 +16,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { JobAdDialog } from '@/components/jobs/job-ad-dialog';
 import { MatchBadge } from '@/components/jobs/match-badge';
+import { formatMatchSummary } from '@/components/jobs/match-badge-logic';
 import { Badge, Button, Card } from '@/components/ui';
 import {
   createApplicationAction,
@@ -68,6 +69,7 @@ export function JobCard({
   const truncated = job.description.length > EXCERPT_LENGTH;
   const applyUrl = applyHref(job);
   const canApply = isSafeExternalUrl(applyUrl);
+  const matchSummary = showMatch && job.match ? formatMatchSummary(job.match) : null;
 
   function toggleSave() {
     if (savedId) {
@@ -154,6 +156,10 @@ export function JobCard({
           </div>
           {showMatch ? <MatchBadge jobId={job.id} match={job.match} /> : null}
         </div>
+
+        {matchSummary ? (
+          <p className="mt-2 text-[12px] leading-snug text-muted">{matchSummary}</p>
+        ) : null}
 
         {job.description ? (
           <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap text-muted">

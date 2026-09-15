@@ -128,7 +128,8 @@ function toApiParams(state: SearchState, offset: number): string {
   const params = toUrlParams(state);
   // Match is always computed; `cv=0` only hides badges in the UI.
   params.delete('cv');
-  params.set('sort', toJobTechSort(state.sort));
+  // Keep `cv-match` for the API — JobTech mapping happens server-side.
+  params.set('sort', state.sort);
   params.set('offset', String(offset));
   params.set('limit', String(PAGE_SIZE));
   return params.toString();
@@ -326,7 +327,7 @@ export function SearchPanel({
         fields: applied.fields,
         groups: applied.groups,
         remote: applied.remote,
-        sort: toJobTechSort(applied.sort),
+        sort: applied.sort,
         publishedAfter: applied.publishedAfter,
         noExperience: applied.noExperience,
       },
@@ -338,7 +339,12 @@ export function SearchPanel({
       const response = await fetch(`/api/jobs?${toApiParams(applied, pageParam)}`);
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Sökningen misslyckades.');
-      return payload as { total: number; results: JobHit[]; hasResume: boolean };
+      return payload as {
+        total: number;
+        results: JobHit[];
+        hasResume: boolean;
+        cvSortCapped?: boolean;
+      };
     },
     getNextPageParam: (last, pages) => {
       const loaded = pages.reduce((sum, page) => sum + page.results.length, 0);
@@ -349,6 +355,7 @@ export function SearchPanel({
   const hits = data?.pages.flatMap((page) => page.results) ?? [];
   const total = data?.pages[0]?.total ?? 0;
   const hasResume = data?.pages[0]?.hasResume ?? true;
+  const cvSortCapped = Boolean(data?.pages[0]?.cvSortCapped);
   const searching = isFetching && !isFetchingNextPage;
   const showInitialSkeleton = (!urlReady || searching) && hits.length === 0;
   const showStaleResults = searching && hits.length > 0;
@@ -920,6 +927,10 @@ export function SearchPanel({
               )}
             </div>
           </div>
+
+          {applied.sort === 'cv-match' && cvSortCapped ? (
+            <p className="text-[12px] text-subtle">Sorterat bland de 100 nyaste träffarna</p>
+          ) : null}
 
           {hits.length === 0 ? (
             qOnlyZero ? (

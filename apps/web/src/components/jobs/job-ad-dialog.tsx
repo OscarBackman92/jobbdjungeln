@@ -2,7 +2,7 @@
 
 import { formatShortDate, isSafeExternalUrl } from '@jobbdjungeln/core';
 import { Bookmark, BookmarkCheck, Building2, ExternalLink, MapPin, Send } from 'lucide-react';
-import { useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type { JobHit } from '@/components/jobs/job-card';
 import { MatchBadge } from '@/components/jobs/match-badge';
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import {
   createApplicationAction,
   deleteApplicationAction,
@@ -25,6 +26,44 @@ import {
 
 function applyHref(job: JobHit): string {
   return job.applicationUrl || job.webpageUrl;
+}
+
+function HighlightedDescription({
+  text,
+  highlight,
+}: {
+  text: string;
+  highlight: string | null;
+}) {
+  const markRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!highlight) return;
+    markRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlight]);
+
+  if (!highlight) {
+    return <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted">{text}</div>;
+  }
+
+  const index = text.toLowerCase().indexOf(highlight.toLowerCase());
+  if (index < 0) {
+    return <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted">{text}</div>;
+  }
+
+  const before = text.slice(0, index);
+  const match = text.slice(index, index + highlight.length);
+  const after = text.slice(index + highlight.length);
+
+  return (
+    <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted">
+      {before}
+      <mark ref={markRef} className="rounded-sm bg-brand-soft px-0.5 text-brand-text">
+        {match}
+      </mark>
+      {after}
+    </div>
+  );
 }
 
 /**
@@ -44,10 +83,16 @@ export function JobAdDialog({
   onSavedIdChange: (id: string | null) => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [activeSnippet, setActiveSnippet] = useState<string | null>(null);
   const saved = savedId !== null;
   const applyUrl = applyHref(job);
   const canApply = isSafeExternalUrl(applyUrl);
   const canOpenAf = isSafeExternalUrl(job.webpageUrl);
+  const match = job.match;
+
+  useEffect(() => {
+    if (!open) setActiveSnippet(null);
+  }, [open]);
 
   function toggleSave() {
     if (savedId) {
@@ -122,15 +167,54 @@ export function JobAdDialog({
             {job.remote ? <Badge tone="info">Distans</Badge> : null}
             {job.workingHoursType ? <Badge tone="neutral">{job.workingHoursType}</Badge> : null}
             {job.occupationLabel ? <Badge tone="outline">{job.occupationLabel}</Badge> : null}
-            <MatchBadge jobId={job.id} match={job.match} />
+            <MatchBadge jobId={job.id} match={match} />
           </div>
         </DialogHeader>
 
         <DialogBody>
+          {match ? (
+            <section className="mb-4 rounded-[var(--radius-control)] border border-line bg-sunken/50 p-3">
+              <h3 className="text-[13px] font-semibold text-ink">Din matchning</h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {match.covered.map((item) => (
+                  <button
+                    key={`covered:${item.term}:${item.snippet}`}
+                    type="button"
+                    className={cn(
+                      'rounded-full bg-positive-soft px-2 py-0.5 text-xs font-medium text-positive-text',
+                      'outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
+                      activeSnippet === item.snippet && 'ring-2 ring-brand/40',
+                    )}
+                    onClick={() => setActiveSnippet(item.snippet || item.term)}
+                  >
+                    {item.term}
+                  </button>
+                ))}
+                {match.gaps.map((item) => (
+                  <button
+                    key={`gap:${item.term}:${item.snippet}`}
+                    type="button"
+                    className={cn(
+                      'rounded-full bg-sunken px-2 py-0.5 text-xs font-medium text-muted',
+                      'outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
+                      activeSnippet === item.snippet && 'ring-2 ring-brand/40',
+                    )}
+                    onClick={() => setActiveSnippet(item.snippet || item.term)}
+                  >
+                    {item.term}
+                  </button>
+                ))}
+                {match.mustTotal === 0 &&
+                match.covered.length === 0 &&
+                match.gaps.length === 0 ? (
+                  <span className="text-[13px] text-subtle">Inga krav listade i annonsen.</span>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
           {job.description ? (
-            <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted">
-              {job.description}
-            </div>
+            <HighlightedDescription text={job.description} highlight={activeSnippet} />
           ) : (
             <p className="text-sm text-muted">Ingen annonstext tillgänglig här.</p>
           )}
