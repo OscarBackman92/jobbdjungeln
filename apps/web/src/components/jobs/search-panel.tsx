@@ -2,7 +2,12 @@
 
 import { pluralWord } from '@jobbdjungeln/core';
 import { regionLabel } from '@jobbdjungeln/jobtech';
-import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQueries,
+  useQuery,
+} from '@tanstack/react-query';
 import { Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -12,6 +17,7 @@ import {
   buildActiveFilterChips,
   countActiveFiltersExcludingQuery,
 } from '@/components/jobs/active-filter-chips';
+import { buildSearchRelaxations } from '@/components/jobs/empty-search-suggestions';
 import { JobCard, type JobHit } from '@/components/jobs/job-card';
 import { MultiSelectCombobox } from '@/components/jobs/multi-select-combobox';
 import { SavedSearches } from '@/components/jobs/saved-searches';
@@ -511,7 +517,7 @@ export function SearchPanel({
     return [...byField.values()].sort((a, b) => a.label.localeCompare(b.label, 'sv'));
   }, [filters?.fields, groupOptions]);
 
-  const activeChips = useMemo(() => {
+  const chipLabelMaps = useMemo(() => {
     const municipalities = new Map(
       municipalityOptions.map((item) => [item.id, item.label] as const),
     );
@@ -521,8 +527,64 @@ export function SearchPanel({
         .filter((item): item is TaxonomyOption & { fieldId: string } => Boolean(item.fieldId))
         .map((item) => [item.id, item.fieldId] as const),
     );
-    return buildActiveFilterChips(applied, { municipalities, groups, groupFields });
-  }, [applied, municipalityOptions, groupOptions]);
+    return { municipalities, groups, groupFields };
+  }, [municipalityOptions, groupOptions]);
+
+  const activeChips = useMemo(
+    () => buildActiveFilterChips(applied, chipLabelMaps),
+    [applied, chipLabelMaps],
+  );
+
+  const emptySearch = isFetched && !searching && !isError && total === 0;
+  const relaxations = useMemo(
+    () => (emptySearch ? buildSearchRelaxations(applied, chipLabelMaps) : []),
+    [emptySearch, applied, chipLabelMaps],
+  );
+
+  const relaxationCounts = useQueries({
+    queries: relaxations.map((relaxation) => ({
+      queryKey: ['jobs-relax-count', relaxation.id, relaxation.next] as const,
+      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+        const response = await fetch(`/api/jobs?${toCountParams(relaxation.next)}`, { signal });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? 'Kunde inte räkna annonser.');
+        return (payload as { total: number }).total;
+      },
+      enabled: emptySearch,
+      staleTime: 30_000,
+    })),
+  });
+
+  const qOnlyCount = useQuery({
+    queryKey: ['jobs-q-only-count', applied.q.trim()] as const,
+    enabled: emptySearch && Boolean(applied.q.trim()),
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(
+        `/api/jobs?${toCountParams({
+          ...EMPTY,
+          q: applied.q.trim(),
+          sort: applied.sort,
+          matchCv: applied.matchCv,
+        })}`,
+        { signal },
+      );
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Kunde inte räkna annonser.');
+      return (payload as { total: number }).total;
+    },
+  });
+
+  const relaxationSuggestions = relaxations
+    .map((relaxation, index) => ({
+      ...relaxation,
+      total: relaxationCounts[index]?.data,
+    }))
+    .filter((item): item is typeof item & { total: number } => typeof item.total === 'number')
+    .filter((item) => item.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  const qOnlyZero = Boolean(applied.q.trim()) && qOnlyCount.isFetched && qOnlyCount.data === 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -747,6 +809,7 @@ export function SearchPanel({
       <SavedSearches
         searches={savedSearches}
         current={applied}
+        hideSave={emptySearch}
         onUse={(state) =>
           apply({
             ...EMPTY,
@@ -859,11 +922,52 @@ export function SearchPanel({
           </div>
 
           {hits.length === 0 ? (
-            <EmptyState
-              icon={Search}
-              title="Inga träffar"
-              description="Prova ett bredare sökord, eller ta bort ett filter."
-            />
+            qOnlyZero ? (
+              <EmptyState
+                icon={Search}
+                title={`Platsbanken har inga annonser för '${applied.q.trim()}' just nu.`}
+                description="Prova ett annat sökord, eller ta bort sökordet och filtrera på yrkesgrupp i stället."
+              />
+            ) : (
+              <div className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-dashed border-line-strong px-6 py-10">
+                <div className="text-center">
+                  <p className="text-sm font-medium text-ink">
+                    Inga annonser matchar alla dina filter.
+                  </p>
+                  {relaxationSuggestions.length === 0 ? (
+                    <p className="mt-2 text-sm text-muted">
+                      Prova ett bredare sökord, eller ta bort ett filter.
+                    </p>
+                  ) : null}
+                </div>
+                {relaxationSuggestions.length > 0 ? (
+                  <ul className="mx-auto flex w-full max-w-lg flex-col gap-2">
+                    {relaxationSuggestions.map((suggestion) => (
+                      <li
+                        key={suggestion.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-line bg-raised px-3 py-2 text-[13px]"
+                      >
+                        <span className="text-ink">
+                          {suggestion.withoutLabel}:{' '}
+                          <span className="font-medium tabular-nums">
+                            {suggestion.total.toLocaleString('sv-SE')}
+                          </span>{' '}
+                          {pluralWord(suggestion.total, 'annons', 'annonser')}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => apply(suggestion.next, { confirm: true })}
+                        >
+                          {suggestion.removeButton}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            )
           ) : (
             <>
               <SearchInsight jobs={hits} today={todayLocal()} />
