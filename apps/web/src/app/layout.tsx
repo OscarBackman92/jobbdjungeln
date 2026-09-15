@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import '@/styles/globals.css';
 
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import { Providers } from '@/components/providers';
 import { env } from '@/lib/env';
 
@@ -60,6 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Hoppa till innehållet
         </a>
         <Providers>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   );
