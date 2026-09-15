@@ -45,7 +45,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
           position="bottom-center"
           richColors
           closeButton
-          toastOptions={{ className: 'text-sm' }}
+          toastOptions={{
+            className: 'text-sm',
+            classNames: {
+              closeButton: '!left-auto !right-1 !top-1',
+            },
+          }}
         />
       </QueryClientProvider>
     </ThemeProvider>
