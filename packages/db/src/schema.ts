@@ -325,6 +325,8 @@ export const savedSearches = pgTable(
     matchCv: boolean().notNull().default(false),
     /** Digest e-mails report hits newer than this. */
     digestCheckedAt: timestamp({ withTimezone: true }),
+    /** Last time the user ran this search in the UI — drives the "N nya" badge. */
+    lastRunAt: timestamp({ withTimezone: true }),
     digestOptIn: boolean().notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

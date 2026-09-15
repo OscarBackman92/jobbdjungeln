@@ -203,6 +203,7 @@ export function SearchPanel({
     occupationGroups: string[];
     remote: boolean;
     matchCv: boolean;
+    lastRunAt: string | null;
   }>;
 }) {
   const router = useRouter();
@@ -731,6 +732,28 @@ export function SearchPanel({
           onExpand={() => setShowFilters(true)}
         />
 
+        <SavedSearches
+          searches={savedSearches}
+          current={applied}
+          hideSave={emptySearch}
+          labelHints={{
+            municipalities: chipLabelMaps.municipalities,
+            groups: chipLabelMaps.groups,
+          }}
+          onUse={(state) =>
+            apply(
+              {
+                ...EMPTY,
+                ...state,
+                sort: 'pubdate-desc',
+                publishedAfter: '',
+                noExperience: false,
+              },
+              { confirm: true },
+            )
+          }
+        />
+
         {showFilters ? (
           <div
             id={filterPanelId}
@@ -894,21 +917,6 @@ export function SearchPanel({
           </div>
         ) : null}
       </form>
-
-      <SavedSearches
-        searches={savedSearches}
-        current={applied}
-        hideSave={emptySearch}
-        onUse={(state) =>
-          apply({
-            ...EMPTY,
-            ...state,
-            sort: 'pubdate-desc',
-            publishedAfter: '',
-            noExperience: false,
-          })
-        }
-      />
 
       <LiveRegion>{liveAnnouncement}</LiveRegion>
 
