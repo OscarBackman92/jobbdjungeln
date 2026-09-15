@@ -1,11 +1,24 @@
 'use client';
 
-import { formatShortDate, isSafeExternalUrl } from '@jobbdjungeln/core';
-import { Bookmark, BookmarkCheck, Building2, ExternalLink, MapPin, Send } from 'lucide-react';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import {
+  formatDeadlineDisplay,
+  formatPublishedDisplay,
+  isSafeExternalUrl,
+} from '@jobbdjungeln/core';
+import {
+  AlertTriangle,
+  Bookmark,
+  BookmarkCheck,
+  Building2,
+  ExternalLink,
+  MapPin,
+  Send,
+} from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type { JobHit } from '@/components/jobs/job-card';
 import { MatchBadge } from '@/components/jobs/match-badge';
+import { formatPlainAdText, sanitizeJobHtml } from '@/components/jobs/sanitize-ad-html';
 import {
   Badge,
   Button,
@@ -24,39 +37,77 @@ import {
   findSimilarAction,
 } from '@/server/actions/applications';
 
-function applyHref(job: JobHit): string {
-  return job.applicationUrl || job.webpageUrl;
+function applyHref(job: JobHit): { href: string; viaPlatsbanken: boolean } {
+  if (job.applicationUrl && isSafeExternalUrl(job.applicationUrl)) {
+    return { href: job.applicationUrl, viaPlatsbanken: false };
+  }
+  return { href: job.webpageUrl, viaPlatsbanken: true };
 }
 
-function HighlightedDescription({
+const DEADLINE_CLASS: Record<string, string> = {
+  danger: 'text-danger-text',
+  warning: 'text-warning-text',
+  'warning-soft': 'text-warning-text/80',
+  muted: 'text-subtle',
+  neutral: 'text-subtle',
+};
+
+function AdBody({
+  html,
   text,
   highlight,
 }: {
+  html: string;
   text: string;
   highlight: string | null;
 }) {
   const markRef = useRef<HTMLElement>(null);
+  const safeHtml = useMemo(() => (html ? sanitizeJobHtml(html) : ''), [html]);
+  const plain = useMemo(() => formatPlainAdText(text), [text]);
 
   useEffect(() => {
     if (!highlight) return;
     markRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [highlight]);
 
+  if (safeHtml) {
+    return (
+      <div
+        className="job-ad-html max-w-[70ch] text-sm leading-relaxed text-muted [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-ink [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-[15px] [&_h2]:font-semibold [&_h2]:text-ink [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_h3]:text-ink [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
+        // Sanitized allowlist only — see sanitizeJobHtml.
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is allowlist-sanitized via sanitizeJobHtml
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      />
+    );
+  }
+
+  if (!plain) {
+    return <p className="text-sm text-muted">Ingen annonstext tillgänglig här.</p>;
+  }
+
   if (!highlight) {
-    return <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted">{text}</div>;
+    return (
+      <div className="max-w-[70ch] text-sm leading-relaxed whitespace-pre-wrap text-muted">
+        {plain}
+      </div>
+    );
   }
 
-  const index = text.toLowerCase().indexOf(highlight.toLowerCase());
+  const index = plain.toLowerCase().indexOf(highlight.toLowerCase());
   if (index < 0) {
-    return <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted">{text}</div>;
+    return (
+      <div className="max-w-[70ch] text-sm leading-relaxed whitespace-pre-wrap text-muted">
+        {plain}
+      </div>
+    );
   }
 
-  const before = text.slice(0, index);
-  const match = text.slice(index, index + highlight.length);
-  const after = text.slice(index + highlight.length);
+  const before = plain.slice(0, index);
+  const match = plain.slice(index, index + highlight.length);
+  const after = plain.slice(index + highlight.length);
 
   return (
-    <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted">
+    <div className="max-w-[70ch] text-sm leading-relaxed whitespace-pre-wrap text-muted">
       {before}
       <mark ref={markRef} className="rounded-sm bg-brand-soft px-0.5 text-brand-text">
         {match}
@@ -84,11 +135,15 @@ export function JobAdDialog({
 }) {
   const [pending, startTransition] = useTransition();
   const [activeSnippet, setActiveSnippet] = useState<string | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const titleId = useId();
   const saved = savedId !== null;
-  const applyUrl = applyHref(job);
-  const canApply = isSafeExternalUrl(applyUrl);
+  const apply = applyHref(job);
+  const canApply = isSafeExternalUrl(apply.href);
   const canOpenAf = isSafeExternalUrl(job.webpageUrl);
   const match = job.match;
+  const deadline = formatDeadlineDisplay(job.applicationDeadline);
+  const published = formatPublishedDisplay(job.publishedAt);
 
   useEffect(() => {
     if (!open) setActiveSnippet(null);
@@ -148,9 +203,19 @@ export function JobAdDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:w-[min(40rem,calc(100vw-2rem))]">
+      <DialogContent
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="sm:w-[min(40rem,calc(100vw-2rem))]"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          titleRef.current?.focus();
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>{job.title}</DialogTitle>
+          <DialogTitle id={titleId} ref={titleRef} tabIndex={-1} className="outline-none">
+            {job.title}
+          </DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="inline-flex items-center gap-1">
               <Building2 className="size-3.5 shrink-0" aria-hidden />
@@ -162,19 +227,35 @@ export function JobAdDialog({
                 {job.location}
               </span>
             ) : null}
-          </DialogDescription>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {job.remote ? <Badge tone="info">Distans</Badge> : null}
             {job.workingHoursType ? <Badge tone="neutral">{job.workingHoursType}</Badge> : null}
-            {job.occupationLabel ? <Badge tone="outline">{job.occupationLabel}</Badge> : null}
-            <MatchBadge jobId={job.id} match={match} />
+            {job.remote ? <Badge tone="info">Distans</Badge> : null}
+          </DialogDescription>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+            {published ? <span className="text-subtle">{published}</span> : null}
+            {deadline ? (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1',
+                  DEADLINE_CLASS[deadline.urgency],
+                )}
+                title={deadline.absolute}
+              >
+                {deadline.urgency === 'danger' ? (
+                  <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                ) : null}
+                {deadline.label}
+              </span>
+            ) : null}
           </div>
         </DialogHeader>
 
         <DialogBody>
           {match ? (
             <section className="mb-4 rounded-[var(--radius-control)] border border-line bg-sunken/50 p-3">
-              <h3 className="text-[13px] font-semibold text-ink">Din matchning</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-[13px] font-semibold text-ink">Din matchning</h3>
+                <MatchBadge jobId={job.id} match={match} />
+              </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {match.covered.map((item) => (
                   <button
@@ -213,26 +294,7 @@ export function JobAdDialog({
             </section>
           ) : null}
 
-          {job.description ? (
-            <HighlightedDescription text={job.description} highlight={activeSnippet} />
-          ) : (
-            <p className="text-sm text-muted">Ingen annonstext tillgänglig här.</p>
-          )}
-
-          <dl className="mt-4 grid gap-2 border-t border-line pt-4 text-[13px] sm:grid-cols-2">
-            {job.publishedAt ? (
-              <div>
-                <dt className="text-subtle">Publicerad</dt>
-                <dd className="text-ink">{formatShortDate(job.publishedAt)}</dd>
-              </div>
-            ) : null}
-            {job.applicationDeadline ? (
-              <div>
-                <dt className="text-subtle">Sista ansökningsdag</dt>
-                <dd className="text-ink">{formatShortDate(job.applicationDeadline)}</dd>
-              </div>
-            ) : null}
-          </dl>
+          <AdBody html={job.descriptionHtml} text={job.description} highlight={activeSnippet} />
         </DialogBody>
 
         <DialogFooter className="sm:justify-between">
@@ -245,12 +307,12 @@ export function JobAdDialog({
               aria-pressed={saved}
             >
               {saved ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
-              {saved ? 'Sparad' : 'Spara till senare'}
+              {saved ? 'Sparad' : 'Spara'}
             </Button>
-            {canOpenAf && job.webpageUrl !== applyUrl ? (
+            {canOpenAf ? (
               <Button variant="ghost" size="sm" asChild>
                 <a href={job.webpageUrl} target="_blank" rel="noopener noreferrer">
-                  På Arbetsförmedlingen
+                  Visa på Arbetsförmedlingen
                   <ExternalLink aria-hidden />
                 </a>
               </Button>
@@ -258,9 +320,10 @@ export function JobAdDialog({
           </div>
           {canApply ? (
             <Button variant="primary" size="sm" asChild>
-              <a href={applyUrl} target="_blank" rel="noopener noreferrer">
+              <a href={apply.href} target="_blank" rel="noopener noreferrer">
                 <Send aria-hidden />
-                Ansök hos arbetsgivaren
+                {apply.viaPlatsbanken ? 'Ansök via Platsbanken' : 'Ansök'}
+                <ExternalLink aria-hidden />
               </a>
             </Button>
           ) : null}

@@ -36,6 +36,7 @@ export interface JobHit {
   companyName: string;
   location: string;
   description: string;
+  descriptionHtml: string;
   webpageUrl: string;
   applicationUrl: string;
   publishedAt: string | null;
