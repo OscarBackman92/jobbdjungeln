@@ -47,13 +47,61 @@ export function BoardView({
   const [search, setSearch] = useState(params.get('sok') ?? '');
   const [selected, setSelected] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openLanes, setOpenLanes] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(lanes.map((lane) => [lane.key, lane.defaultOpen ?? true])),
+  );
   const archivedId = useId();
 
   const archived = params.get('arkiverade') === '1';
+  const focusLane = params.get('grupp');
+  const focusRow = params.get('rad');
+
+  useEffect(() => {
+    if (!focusLane) return;
+    setOpenLanes((current) => ({ ...current, [focusLane]: true }));
+    const timer = window.setTimeout(() => {
+      document.getElementById(`lane-${focusLane}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [focusLane]);
+
+  useEffect(() => {
+    if (!focusRow) return;
+    setOpenId(focusRow);
+  }, [focusRow]);
   const total = lanes.reduce((sum, lane) => sum + lane.rows.length, 0);
-  const allIds = useMemo(
-    () => lanes.flatMap((lane) => lane.rows.map((row) => row.id)),
-    [lanes],
+
+  useEffect(() => {
+    setOpenLanes((current) => {
+      const next = { ...current };
+      for (const lane of lanes) {
+        if (next[lane.key] === undefined) next[lane.key] = lane.defaultOpen ?? true;
+      }
+      return next;
+    });
+  }, [lanes]);
+
+  const visibleIds = useMemo(
+    () =>
+      lanes
+        .filter((lane) => openLanes[lane.key] !== false)
+        .flatMap((lane) => lane.rows.map((row) => row.id)),
+    [lanes, openLanes],
+  );
+
+  const rowsById = useMemo(() => {
+    const map = new Map<string, BoardRow>();
+    for (const lane of lanes) {
+      for (const row of lane.rows) map.set(row.id, row);
+    }
+    return map;
+  }, [lanes]);
+  const selectedRows = useMemo(
+    () => selected.map((id) => rowsById.get(id)).filter((row): row is BoardRow => Boolean(row)),
+    [selected, rowsById],
   );
 
   // Debounced, so typing does not fire a server round-trip per keystroke.
@@ -69,10 +117,11 @@ export function BoardView({
     return () => clearTimeout(timer);
   }, [search, params, router]);
 
-  // A row that has scrolled out of the filtered set must not stay selected.
+  // Drop selections that are no longer on the board at all.
   useEffect(() => {
+    const allIds = lanes.flatMap((lane) => lane.rows.map((row) => row.id));
     setSelected((current) => current.filter((id) => allIds.includes(id)));
-  }, [allIds]);
+  }, [lanes]);
 
   function toggleArchived(next: boolean) {
     const params_ = new URLSearchParams(params.toString());
@@ -86,6 +135,11 @@ export function BoardView({
       isSelected ? [...current, id] : current.filter((value) => value !== id),
     );
   }
+
+  const selectAllLabel =
+    variant === 'applied'
+      ? `Välj alla ${visibleIds.length} synliga`
+      : `Välj alla (${visibleIds.length})`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -121,16 +175,16 @@ export function BoardView({
           </Label>
         </span>
 
-        {selected.length > 0 ? null : (
+        {selected.length === 0 ? (
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setSelected(allIds)}
-            disabled={allIds.length === 0}
+            onClick={() => setSelected(visibleIds)}
+            disabled={visibleIds.length === 0}
           >
-            Välj alla ({allIds.length})
+            {selectAllLabel}
           </Button>
-        )}
+        ) : null}
       </div>
 
       {total === 0 ? (
@@ -147,11 +201,15 @@ export function BoardView({
           {lanes.map((lane) => (
             <Lane
               key={lane.key}
+              id={`lane-${lane.key}`}
               title={lane.title}
               hint={lane.hint}
               count={lane.rows.length}
               tone={lane.tone}
-              defaultOpen={lane.defaultOpen ?? true}
+              open={openLanes[lane.key] !== false}
+              onOpenChange={(open) =>
+                setOpenLanes((current) => ({ ...current, [lane.key]: open }))
+              }
             >
               {lane.rows.map((row) => (
                 <ApplicationRow
@@ -161,6 +219,7 @@ export function BoardView({
                   onSelect={select}
                   onOpen={setOpenId}
                   showDeadline={showDeadline}
+                  showAppliedMeta={variant === 'applied'}
                 />
               ))}
             </Lane>
@@ -168,7 +227,13 @@ export function BoardView({
         </div>
       )}
 
-      <BulkBar selected={selected} onClear={() => setSelected([])} variant={variant} />
+      <BulkBar
+        selected={selectedRows}
+        totalCount={visibleIds.length}
+        onClear={() => setSelected([])}
+        onSelectAll={() => setSelected(visibleIds)}
+        variant={variant}
+      />
       <ApplicationSheet id={openId} onClose={() => setOpenId(null)} />
     </div>
   );

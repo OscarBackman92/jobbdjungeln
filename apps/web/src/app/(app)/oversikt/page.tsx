@@ -38,9 +38,10 @@ import { skillInsights } from '@/server/queries/insights';
 export const metadata: Metadata = { title: 'Översikt' };
 
 const ACTION_LABELS = {
-  follow_up: 'Följ upp',
-  apply_by: 'Sök senast',
+  follow_up: 'Uppföljning',
+  apply_by: 'Egen påminnelse',
   deadline: 'Sista ansökningsdag',
+  waiting: 'Väntar för länge',
 } as const;
 
 function savedHint(lanes: {
@@ -58,11 +59,19 @@ function savedHint(lanes: {
   return 'inget brådskar';
 }
 
+function actionHref(board: 'saved' | 'applied', id: string): string {
+  const base = board === 'saved' ? '/sparade' : '/ansokningar';
+  return `${base}?rad=${encodeURIComponent(id)}`;
+}
+
 export default async function OverviewPage() {
   const user = await requireUser();
   const [summary, insights] = await Promise.all([dashboard(user.id), skillInsights(user.id)]);
   const nothingYet = summary.saved === 0 && summary.active === 0 && summary.closed === 0;
   const paceLabel = summary.pace.toFixed(1).replace('.', ',');
+  const outcomeEntries = (Object.entries(summary.outcomes) as [Outcome, number][])
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1]);
 
   return (
     <>
@@ -106,7 +115,7 @@ export default async function OverviewPage() {
               label="Väntar för länge"
               value={summary.waitingTooLong}
               hint={summary.waitingTooLong > 0 ? 'hör av dig' : 'inget att jaga'}
-              href="/ansokningar"
+              href="/ansokningar?grupp=vantar_for_lange"
               icon={AlertTriangle}
               tone={summary.waitingTooLong > 0 ? 'warning' : 'neutral'}
             />
@@ -118,6 +127,7 @@ export default async function OverviewPage() {
                   ? 'för få ansökningar än'
                   : `${paceLabel} ansökningar/vecka`
               }
+              href="/ansokningar?grupp=avslutade"
               icon={TrendingUp}
             />
           </section>
@@ -126,51 +136,61 @@ export default async function OverviewPage() {
             <Card className="min-w-0">
               <CardHeader>
                 <CardTitle>Nästa steg</CardTitle>
-                <CardDescription>Det som har en dag satt för sig.</CardDescription>
+                <CardDescription>Det du bör göra de närmaste 7 dagarna.</CardDescription>
               </CardHeader>
               <CardContent className="min-w-0">
                 {summary.nextActions.length === 0 ? (
                   <p className="py-4 text-sm text-muted">
-                    Inget inplanerat. Sätt en uppföljningsdag på en ansökan så dyker den upp
-                    här.
+                    {summary.nextDeadline
+                      ? `Inget brådskar. Nästa deadline: ${summary.nextDeadline.title} om ${summary.nextDeadline.days} dagar.`
+                      : 'Inget brådskar just nu.'}
                   </p>
                 ) : (
                   <ul className="flex min-w-0 flex-col divide-y divide-line">
                     {summary.nextActions.map((action) => (
-                      <li
-                        key={`${action.id}-${action.kind}`}
-                        className="flex min-w-0 flex-col gap-1 py-2.5 first:pt-0 sm:flex-row sm:items-center sm:gap-3"
-                      >
-                        <div className="flex min-w-0 flex-1 items-start gap-3">
-                          <CalendarClock
-                            className={
-                              action.overdue
-                                ? 'mt-0.5 size-4 shrink-0 text-warning'
-                                : 'mt-0.5 size-4 shrink-0 text-subtle'
-                            }
-                            aria-hidden
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-ink">
-                              {action.title}
-                            </p>
-                            <p className="truncate text-[13px] text-subtle">{action.company}</p>
+                      <li key={`${action.id}-${action.kind}`} className="first:pt-0">
+                        <Link
+                          href={actionHref(action.board, action.id)}
+                          className="flex min-w-0 flex-col gap-1 py-2.5 outline-none hover:bg-hover sm:flex-row sm:items-center sm:gap-3"
+                        >
+                          <div className="flex min-w-0 flex-1 items-start gap-3">
+                            <CalendarClock
+                              className={
+                                action.overdue
+                                  ? 'mt-0.5 size-4 shrink-0 text-warning'
+                                  : 'mt-0.5 size-4 shrink-0 text-subtle'
+                              }
+                              aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-ink">
+                                {action.title}
+                              </p>
+                              <p className="truncate text-[13px] text-subtle">
+                                {action.company}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="min-w-0 pl-7 sm:shrink-0 sm:pl-0 sm:text-right">
-                          <p
-                            className={
-                              action.overdue
-                                ? 'truncate text-[13px] font-medium text-warning-text'
-                                : 'truncate text-[13px] text-muted'
-                            }
-                          >
-                            {formatRelativeDays(action.due)}
-                          </p>
-                          <p className="truncate text-[11px] text-subtle">
-                            {ACTION_LABELS[action.kind]} {formatShortDate(action.due)}
-                          </p>
-                        </div>
+                          <div className="min-w-0 pl-7 sm:shrink-0 sm:pl-0 sm:text-right">
+                            <p
+                              className={
+                                action.overdue
+                                  ? 'truncate text-[13px] font-medium text-warning-text'
+                                  : 'truncate text-[13px] text-muted'
+                              }
+                            >
+                              {action.kind === 'waiting'
+                                ? 'Följ upp'
+                                : formatRelativeDays(action.due)}
+                            </p>
+                            <p className="truncate text-[11px] text-subtle">
+                              {ACTION_LABELS[action.kind]}
+                              {action.kind !== 'waiting'
+                                ? ` ${formatShortDate(action.due)}`
+                                : ''}
+                            </p>
+                          </div>
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -183,44 +203,32 @@ export default async function OverviewPage() {
                 <CardTitle>Från sökt till erbjudande</CardTitle>
                 <CardDescription>Hur långt dina ansökningar har kommit.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-col gap-4">
                 <Funnel steps={summary.funnel} />
+                {outcomeEntries.length > 0 ? (
+                  <div className="border-t border-line pt-3">
+                    <p className="mb-2 text-[13px] font-medium text-ink">Avslutade utfall</p>
+                    <ul className="flex flex-wrap gap-2">
+                      {outcomeEntries.map(([outcome, count]) => (
+                        <li key={outcome}>
+                          <Badge tone="neutral">
+                            {OUTCOME_LABELS[outcome]} {count}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
-            <Card className="min-w-0">
+            <Card className="min-w-0 lg:col-span-2">
               <CardHeader>
                 <CardTitle>Sökta jobb per månad</CardTitle>
                 <CardDescription>De senaste sex månaderna.</CardDescription>
               </CardHeader>
               <CardContent>
                 <MonthlyChart points={summary.monthly} />
-              </CardContent>
-            </Card>
-
-            <Card className="min-w-0">
-              <CardHeader>
-                <CardTitle>Så här har det gått</CardTitle>
-                <CardDescription>Avslutade ansökningar, per utfall.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {summary.closed === 0 ? (
-                  <p className="py-4 text-sm text-muted">Inga avslutade ansökningar ännu.</p>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {(Object.entries(summary.outcomes) as [Outcome, number][])
-                      .filter(([, count]) => count > 0)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([outcome, count]) => (
-                        <li key={outcome} className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-muted">{OUTCOME_LABELS[outcome]}</span>
-                          <span className="text-sm font-medium tabular-nums text-ink">
-                            {count}
-                          </span>
-                        </li>
-                      ))}
-                  </ul>
-                )}
               </CardContent>
             </Card>
           </div>
@@ -234,16 +242,22 @@ export default async function OverviewPage() {
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 {Object.entries(summary.savedLanes).map(([lane, count]) => (
-                  <Badge
+                  <Link
                     key={lane}
-                    tone={
-                      (lane === 'utgangna' || lane === 'idag_imorgon') && count > 0
-                        ? 'warning'
-                        : 'neutral'
-                    }
+                    href={`/sparade?grupp=${lane}`}
+                    className={count === 0 ? 'pointer-events-none opacity-40' : undefined}
                   >
-                    {SAVED_LANE_LABELS[lane as keyof typeof SAVED_LANE_LABELS]} {count}
-                  </Badge>
+                    <Badge
+                      tone={
+                        (lane === 'utgangna' || lane === 'idag_imorgon') && count > 0
+                          ? 'warning'
+                          : 'neutral'
+                      }
+                      className={count > 0 ? 'hover:bg-hover' : undefined}
+                    >
+                      {SAVED_LANE_LABELS[lane as keyof typeof SAVED_LANE_LABELS]} {count}
+                    </Badge>
+                  </Link>
                 ))}
               </CardContent>
             </Card>
@@ -253,12 +267,18 @@ export default async function OverviewPage() {
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 {Object.entries(summary.appliedLanes).map(([lane, count]) => (
-                  <Badge
+                  <Link
                     key={lane}
-                    tone={lane === 'vantar_for_lange' && count > 0 ? 'warning' : 'neutral'}
+                    href={`/ansokningar?grupp=${lane}`}
+                    className={count === 0 ? 'pointer-events-none opacity-40' : undefined}
                   >
-                    {APPLIED_LANE_LABELS[lane as keyof typeof APPLIED_LANE_LABELS]} {count}
-                  </Badge>
+                    <Badge
+                      tone={lane === 'vantar_for_lange' && count > 0 ? 'warning' : 'neutral'}
+                      className={count > 0 ? 'hover:bg-hover' : undefined}
+                    >
+                      {APPLIED_LANE_LABELS[lane as keyof typeof APPLIED_LANE_LABELS]} {count}
+                    </Badge>
+                  </Link>
                 ))}
               </CardContent>
             </Card>

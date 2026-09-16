@@ -7,6 +7,7 @@ import {
   type IsoDate,
   isFollowUpOverdue,
   isOverdue,
+  type MatchSnapshot,
   type SavedLane,
   type Stage,
   type Status,
@@ -47,6 +48,7 @@ export interface BoardRow {
   contactName: string;
   notes: string;
   matchScore: number | null;
+  matchSnapshot: MatchSnapshot | null;
   archivedAt: Date | null;
   eventCount: number;
   /** Days without a reply, when the row is waiting for one. */
@@ -76,6 +78,7 @@ const rowColumns = {
   contactName: schema.applications.contactName,
   notes: schema.applications.notes,
   matchScore: schema.applications.matchScore,
+  matchSnapshot: schema.applications.matchSnapshot,
   archivedAt: schema.applications.archivedAt,
   furthestStage: schema.applications.furthestStage,
   eventCount: sql<number>`(

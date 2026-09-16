@@ -5,6 +5,12 @@ import { ThemeProvider } from 'next-themes';
 import { useState } from 'react';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui';
+import { normalizeThemeStorage } from '@/lib/theme';
+
+// Migrate legacy values (e.g. "daylight") before next-themes reads storage.
+if (typeof window !== 'undefined') {
+  normalizeThemeStorage();
+}
 
 /**
  * Client-side providers.
@@ -45,7 +51,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
           position="bottom-center"
           richColors
           closeButton
-          toastOptions={{ className: 'text-sm' }}
+          toastOptions={{
+            className: 'text-sm',
+            classNames: {
+              closeButton: '!left-auto !right-1 !top-1',
+            },
+          }}
         />
       </QueryClientProvider>
     </ThemeProvider>

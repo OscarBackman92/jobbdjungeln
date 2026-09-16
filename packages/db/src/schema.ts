@@ -13,6 +13,7 @@
 
 import {
   ACTIVITY_TYPES,
+  AF_OUTCOMES,
   APPLICATION_SOURCES,
   INTENTS,
   OUTCOMES,
@@ -21,9 +22,11 @@ import {
 } from '@jobbdjungeln/core';
 import { relations, sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   date,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -51,6 +54,7 @@ export const outcomeEnum = pgEnum('outcome', OUTCOMES);
 export const intentEnum = pgEnum('intent', INTENTS);
 export const applicationSourceEnum = pgEnum('application_source', APPLICATION_SOURCES);
 export const activityTypeEnum = pgEnum('activity_type', ACTIVITY_TYPES);
+export const afOutcomeEnum = pgEnum('af_outcome', AF_OUTCOMES);
 export const eventOriginEnum = pgEnum('event_origin', ['manual', 'auto', 'import']);
 
 /* ------------------------------------------------------------------ *
@@ -142,6 +146,21 @@ export const verifications = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [index('verifications_identifier_idx').on(table.identifier)],
+);
+
+/**
+ * better-auth rate-limit store (`rateLimit.storage: "database"`).
+ * Counters must survive across serverless instances — memory storage does not.
+ */
+export const rateLimits = pgTable(
+  'rate_limits',
+  {
+    id: id(),
+    key: text().notNull(),
+    count: integer().notNull(),
+    lastRequest: bigint({ mode: 'number' }).notNull(),
+  },
+  (table) => [uniqueIndex('rate_limits_key_key').on(table.key)],
 );
 
 /* ------------------------------------------------------------------ *
@@ -272,7 +291,7 @@ export const resumes = pgTable('resumes', {
   skills: jsonb().$type<string[]>().notNull().default([]),
   experience: jsonb().$type<ResumeExperience[]>().notNull().default([]),
   education: jsonb().$type<ResumeEducation[]>().notNull().default([]),
-  /** Named skill sets — "Ekonomi", "IT-support" — scored separately. */
+  /** Named selections from the flat skill list — "Ekonomi", "IT-support". */
   jobProfiles: jsonb().$type<JobProfile[]>().notNull().default([]),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -299,8 +318,9 @@ export interface ResumeEducation {
 export interface JobProfile {
   id: string;
   label: string;
+  /** Selected skills from the flat CV list. */
   skills: string[];
-  /** Skills the user has explicitly confirmed they can back up. */
+  /** Skills the user can back up; defaults to the full selection. */
   confirmed: string[];
 }
 
@@ -325,6 +345,8 @@ export const savedSearches = pgTable(
     matchCv: boolean().notNull().default(false),
     /** Digest e-mails report hits newer than this. */
     digestCheckedAt: timestamp({ withTimezone: true }),
+    /** Last time the user ran this search in the UI — drives the "N nya" badge. */
+    lastRunAt: timestamp({ withTimezone: true }),
     digestOptIn: boolean().notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -369,6 +391,8 @@ export const activities = pgTable(
     organisation: text().notNull().default(''),
     note: text().notNull().default(''),
     applicationId: text().references(() => applications.id, { onDelete: 'set null' }),
+    /** Set for AF handlingsplan items: whether the activity was completed. */
+    afOutcome: afOutcomeEnum(),
     reportExcluded: boolean().notNull().default(false),
     reportNote: text().notNull().default(''),
     reportedInId: text().references(() => reportPeriods.id, { onDelete: 'set null' }),

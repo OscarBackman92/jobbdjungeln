@@ -156,6 +156,8 @@ function auth() {
     // limiter.
     rateLimit: {
       enabled: true,
+      // Persist across serverless instances — in-memory counters reset per cold start.
+      storage: 'database',
       window: 60,
       max: config.AUTH_TEST_MODE ? 10_000 : 30,
       // The credential endpoints are what gets attacked, so they are held much

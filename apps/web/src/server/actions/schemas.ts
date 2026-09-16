@@ -1,7 +1,9 @@
 import {
   ACTIVITY_TYPES,
+  AF_OUTCOMES,
   APPLICATION_SOURCES,
   INTENTS,
+  isAfPlanActivity,
   isIsoDate,
   STATUSES,
 } from '@jobbdjungeln/core';
@@ -149,15 +151,26 @@ export const resumeSchema = z.object({
     .default([]),
 });
 
-export const activitySchema = z.object({
-  id: z.string().optional(),
-  type: activityTypeSchema,
-  occurredOn: z.string().refine(isIsoDate, 'Ange ett giltigt datum.'),
-  title: trimmed(255).min(1, 'Ge aktiviteten ett namn.'),
-  organisation: trimmed(255).default(''),
-  note: trimmed(2000).default(''),
-  applicationId: z.string().optional(),
-});
+export const activitySchema = z
+  .object({
+    id: z.string().optional(),
+    type: activityTypeSchema,
+    occurredOn: z.string().refine(isIsoDate, 'Ange ett giltigt datum.'),
+    title: trimmed(255).min(1, 'Ge aktiviteten ett namn.'),
+    organisation: trimmed(255).default(''),
+    note: trimmed(2000).default(''),
+    applicationId: z.string().optional(),
+    afOutcome: z.enum(AF_OUTCOMES).nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (isAfPlanActivity(value.type) && !value.afOutcome) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['afOutcome'],
+        message: 'Ange om aktiviteten är genomförd eller inte.',
+      });
+    }
+  });
 
 export const periodKeySchema = z.string().regex(/^\d{4}-\d{2}$/, 'Ogiltig månad.');
 

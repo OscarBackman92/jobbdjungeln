@@ -39,6 +39,7 @@ describe('hitToJobAd', () => {
       companyName: 'Acme AB',
       location: 'Jönköping',
       description: 'Du har erfarenhet av Excel.',
+      descriptionHtml: '',
       applicationUrl: 'https://acme.test/ansok',
       publishedAt: '2026-06-01',
       applicationDeadline: '2026-06-30',
@@ -108,6 +109,66 @@ describe('search', () => {
     expect(url.searchParams.get('offset')).toBe('0');
     expect(result.total).toBe(2);
     expect(result.results).toHaveLength(1);
+  });
+
+  it('allows limit=0 so callers can fetch only the total', async () => {
+    const fetch = stubFetch({ total: { value: 281 }, hits: [] });
+    const client = createJobTechClient({ fetch, searchUrl: 'https://jt.test/search' });
+    const result = await client.search({ limit: 0 });
+
+    const url = new URL(String(fetch.mock.calls[0]?.[0]));
+    expect(url.searchParams.get('limit')).toBe('0');
+    expect(result.total).toBe(281);
+    expect(result.results).toHaveLength(0);
+  });
+
+  it('requests and parses stats buckets for the full result set', async () => {
+    const fetch = stubFetch({
+      total: { value: 100 },
+      hits: [],
+      stats: [
+        {
+          type: 'municipality',
+          values: [
+            { term: 'Stockholm', concept_id: 'AvNB_uwa_6n6', count: 40 },
+            { term: 'Göteborg', concept_id: 'oYPt_yRv_okr', count: 20 },
+          ],
+        },
+        {
+          type: 'occupation-group',
+          values: [{ term: 'Mjukvaru- och systemutvecklare m.fl.', concept_id: 'grp_1', count: 15 }],
+        },
+      ],
+    });
+    const client = createJobTechClient({ fetch, searchUrl: 'https://jt.test/search' });
+    const result = await client.search({
+      limit: 0,
+      stats: ['municipality', 'occupation-group'],
+      statsLimit: 5,
+    });
+
+    const url = new URL(String(fetch.mock.calls[0]?.[0]));
+    expect(url.searchParams.getAll('stats')).toEqual(['municipality', 'occupation-group']);
+    expect(url.searchParams.get('stats.limit')).toBe('5');
+    expect(result.stats).toEqual([
+      {
+        type: 'municipality',
+        values: [
+          { conceptId: 'AvNB_uwa_6n6', label: 'Stockholm', count: 40 },
+          { conceptId: 'oYPt_yRv_okr', label: 'Göteborg', count: 20 },
+        ],
+      },
+      {
+        type: 'occupation-group',
+        values: [
+          {
+            conceptId: 'grp_1',
+            label: 'Mjukvaru- och systemutvecklare m.fl.',
+            count: 15,
+          },
+        ],
+      },
+    ]);
   });
 
   it('lets municipalities override the region they sit in', async () => {

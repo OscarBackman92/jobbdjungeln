@@ -78,4 +78,22 @@ test.describe('tillgänglighet', () => {
     await page.getByRole('radio', { name: 'Ljust' }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   });
+
+  test('dialoger exponerar aria-modal', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/sparade');
+    await page.getByRole('button', { name: 'Nytt sparat jobb' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  test('publiceringsfilter är en radiogrupp', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/annonser');
+    await page.getByRole('button', { name: /^Filter/ }).click();
+    const group = page.getByRole('radiogroup', { name: 'Publicerad' });
+    await expect(group).toBeVisible();
+    await group.getByRole('radio', { name: '7 dagar' }).check();
+    await expect(group.getByRole('radio', { name: '7 dagar' })).toBeChecked();
+  });
 });

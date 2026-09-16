@@ -4,11 +4,13 @@ import {
   allowedNextStatuses,
   requiresSalaryClaim,
   STATUS_LABELS,
+  STATUS_MENU_GROUPS,
   type Status,
   stageForStatus,
 } from '@jobbdjungeln/core';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { SalaryClaimDialog } from '@/components/board/salary-claim-dialog';
@@ -19,9 +21,8 @@ import { changeStatusAction } from '@/server/actions/applications';
 /**
  * Move a row along the pipeline.
  *
- * Only transitions the domain allows are offered, so the menu can never produce
- * a state the server would refuse. Leaving the wishlist asks for the salary
- * expectation first — that is the one moment the answer is actually known.
+ * Application rows can jump to any non-wishlist status; saved jobs stay limited
+ * to Ansökt / Återkallad. Leaving the wishlist asks for salary when required.
  */
 export function StatusMenu({
   id,
@@ -32,16 +33,30 @@ export function StatusMenu({
   status: Status;
   salaryClaim: string;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [askingFor, setAskingFor] = useState<Status | null>(null);
 
-  function apply(next: Status, claim?: string) {
+  function apply(next: Status, claim?: string, previous: Status = status) {
     startTransition(async () => {
       try {
         const result = await changeStatusAction({ id, status: next, salaryClaim: claim });
         if (result.ok) {
-          toast.success(`Flyttad till ${STATUS_LABELS[next]}`);
           setAskingFor(null);
+          toast(`Flyttad till ${STATUS_LABELS[next]}`, {
+            duration: 8000,
+            cancel: {
+              label: 'Ångra',
+              onClick: () => {
+                startTransition(async () => {
+                  const undone = await changeStatusAction({ id, status: previous });
+                  if (undone.ok) router.refresh();
+                  else toast.error(undone.error);
+                });
+              },
+            },
+          });
+          router.refresh();
         } else if (result.fieldErrors?.salaryClaim) {
           setAskingFor(next);
         } else {
@@ -54,6 +69,7 @@ export function StatusMenu({
   }
 
   function select(next: Status) {
+    if (next === status) return;
     const leavingWishlist =
       stageForStatus(status) === 'bevakad' && stageForStatus(next) !== 'bevakad';
     if (leavingWishlist && requiresSalaryClaim(next) && !salaryClaim.trim()) {
@@ -62,6 +78,9 @@ export function StatusMenu({
     }
     apply(next);
   }
+
+  const wishlist = status === 'wishlist';
+  const allowed = new Set(allowedNextStatuses(status));
 
   return (
     <>
@@ -81,20 +100,53 @@ export function StatusMenu({
           <DropdownMenu.Content
             align="start"
             sideOffset={6}
-            className="z-50 min-w-48 rounded-[var(--radius-control)] border border-line bg-raised p-1 shadow-overlay"
+            className="z-50 min-w-52 rounded-[var(--radius-control)] border border-line bg-raised p-1 shadow-overlay"
           >
-            <DropdownMenu.Label className="px-2 py-1.5 text-xs font-medium text-subtle">
-              Flytta till
-            </DropdownMenu.Label>
-            {allowedNextStatuses(status).map((next) => (
-              <DropdownMenu.Item
-                key={next}
-                onSelect={() => select(next)}
-                className="cursor-pointer rounded-md px-2 py-2 text-sm text-ink outline-none data-[highlighted]:bg-hover"
-              >
-                {STATUS_LABELS[next]}
-              </DropdownMenu.Item>
-            ))}
+            {wishlist ? (
+              <>
+                <DropdownMenu.Label className="px-2 py-1.5 text-xs font-medium text-subtle">
+                  Flytta till
+                </DropdownMenu.Label>
+                {allowedNextStatuses(status).map((next) => (
+                  <DropdownMenu.Item
+                    key={next}
+                    onSelect={() => select(next)}
+                    className="cursor-pointer rounded-md px-2 py-2 text-sm text-ink outline-none data-[highlighted]:bg-hover"
+                  >
+                    {STATUS_LABELS[next]}
+                  </DropdownMenu.Item>
+                ))}
+              </>
+            ) : (
+              STATUS_MENU_GROUPS.map((group) => (
+                <DropdownMenu.Group key={group.label}>
+                  <DropdownMenu.Label className="px-2 py-1.5 text-xs font-medium text-subtle">
+                    {group.label}
+                  </DropdownMenu.Label>
+                  {group.statuses.map((next) => {
+                    const current = next === status;
+                    const enabled = current || allowed.has(next);
+                    return (
+                      <DropdownMenu.CheckboxItem
+                        key={next}
+                        checked={current}
+                        disabled={!enabled || pending}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          select(next);
+                        }}
+                        className="relative flex cursor-pointer items-center rounded-md py-2 pr-2 pl-7 text-sm text-ink outline-none data-[disabled]:opacity-50 data-[highlighted]:bg-hover"
+                      >
+                        <DropdownMenu.ItemIndicator className="absolute left-2 inline-flex">
+                          <Check className="size-3.5" aria-hidden />
+                        </DropdownMenu.ItemIndicator>
+                        {STATUS_LABELS[next]}
+                      </DropdownMenu.CheckboxItem>
+                    );
+                  })}
+                </DropdownMenu.Group>
+              ))
+            )}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

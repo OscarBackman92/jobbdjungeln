@@ -16,6 +16,17 @@ export async function GET(request: Request) {
 
   try {
     const experienceParam = url.searchParams.get('erfarenhet');
+    const statsRaw = url.searchParams.getAll('stats');
+    const stats = statsRaw.filter(
+      (value): value is 'municipality' | 'occupation-group' =>
+        value === 'municipality' || value === 'occupation-group',
+    );
+    const statsLimitRaw = Number(url.searchParams.get('stats.limit'));
+    const statsLimit =
+      Number.isFinite(statsLimitRaw) && statsLimitRaw > 0
+        ? Math.min(Math.trunc(statsLimitRaw), 20)
+        : undefined;
+
     const result = await searchJobs(
       user.id,
       {
@@ -31,14 +42,20 @@ export async function GET(request: Request) {
             | 'relevance'
             | 'applydate-asc'
             | 'applydate-desc'
+            | 'cv-match'
             | null) ?? undefined,
         publishedAfter: url.searchParams.get('publicerad') ?? undefined,
         experience: experienceParam === '0' ? false : undefined,
         employmentType: url.searchParams.getAll('anstallningstyp'),
         offset: number('offset', 0),
+        // JobTech allows 0–MAX_LIMIT; 0 is a count-only request.
         limit: Math.min(number('limit', 25), MAX_LIMIT),
+        stats: stats.length ? stats : undefined,
+        statsLimit,
       },
-      { withMatch: url.searchParams.get('cv') !== '0' },
+      {
+        withMatch: number('limit', 25) !== 0 && url.searchParams.get('cv') !== '0',
+      },
     );
 
     return NextResponse.json(result, {

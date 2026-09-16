@@ -23,7 +23,13 @@ export const jobTechHitSchema = z
   .object({
     id: z.union([z.string(), z.number()]).nullish(),
     headline: z.string().nullish(),
-    description: z.object({ text: z.string().nullish() }).loose().nullish(),
+    description: z
+      .object({
+        text: z.string().nullish(),
+        text_formatted: z.string().nullish(),
+      })
+      .loose()
+      .nullish(),
     employer: z.object({ name: z.string().nullish() }).loose().nullish(),
     workplace_address: z
       .object({ municipality: z.string().nullish(), city: z.string().nullish() })
@@ -53,10 +59,26 @@ export const jobTechHitSchema = z
 
 export type JobTechHit = z.infer<typeof jobTechHitSchema>;
 
+export const jobTechStatValueSchema = z
+  .object({
+    term: z.string().nullish(),
+    concept_id: z.string().nullish(),
+    count: z.number().nullish(),
+  })
+  .loose();
+
+export const jobTechStatBucketSchema = z
+  .object({
+    type: z.string().nullish(),
+    values: z.array(z.unknown()).nullish(),
+  })
+  .loose();
+
 export const jobTechSearchResponseSchema = z
   .object({
     total: z.object({ value: z.number().nullish() }).loose().nullish(),
     hits: z.array(z.unknown()).nullish(),
+    stats: z.array(z.unknown()).nullish(),
   })
   .loose();
 

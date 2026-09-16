@@ -8,6 +8,7 @@ import { ProfileTabs } from '@/components/profile/profile-tabs';
 import { ResumeEditor } from '@/components/profile/resume-editor';
 import { Skeleton } from '@/components/ui';
 import { db } from '@/lib/db';
+import { env } from '@/lib/env';
 import { requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Profil' };
@@ -23,6 +24,7 @@ export default async function ProfilePage({
   const resume = await db().query.resumes.findFirst({
     where: eq(schema.resumes.userId, user.id),
   });
+  const contactEmail = env().CONTACT_EMAIL;
 
   return (
     <>
@@ -43,6 +45,7 @@ export default async function ProfilePage({
                 education: resume?.education ?? [],
                 jobProfiles: resume?.jobProfiles ?? [],
               }}
+              accountFirstName={user.name?.split(/\s+/)[0] ?? ''}
             />
           }
           account={
@@ -52,6 +55,7 @@ export default async function ProfilePage({
               name={user.name}
               weeklySummaryOptIn={user.weeklySummaryOptIn}
               reminderOptIn={user.reminderOptIn}
+              contactEmail={contactEmail}
             />
           }
         />

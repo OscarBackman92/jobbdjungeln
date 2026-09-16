@@ -12,11 +12,12 @@ export default function PrivacyPage() {
   return (
     <article className="flex flex-col gap-6 text-[15px] leading-relaxed text-muted">
       <h1 className="text-2xl font-semibold tracking-tight text-ink">Integritetspolicy</h1>
-      <p className="text-sm text-subtle">Version 2026-09-15</p>
+      <p className="text-sm text-subtle">Version 2026-09-16</p>
 
       <h2 className="text-lg font-semibold tracking-tight text-ink">Personuppgiftsansvarig</h2>
       <p>
-        Jobbdjungeln är personuppgiftsansvarig för behandlingen av dina uppgifter i tjänsten.
+        Oscar Backman är personuppgiftsansvarig för behandlingen av dina uppgifter i tjänsten
+        Jobbdjungeln.
         {contact ? (
           <>
             {' '}

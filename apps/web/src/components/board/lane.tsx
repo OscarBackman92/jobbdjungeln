@@ -2,7 +2,6 @@
 
 import { ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -12,25 +11,29 @@ import { cn } from '@/lib/utils';
  * the point of the boards is that what is urgent is the first thing you see.
  */
 export function Lane({
+  id,
   title,
   hint,
   count,
   tone = 'neutral',
-  defaultOpen = true,
+  open,
+  onOpenChange,
   children,
 }: {
+  id?: string;
   title: string;
   hint?: string;
   count: number;
   tone?: 'neutral' | 'warning';
-  defaultOpen?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   if (count === 0) return null;
 
   return (
     <section
+      id={id}
       className={cn(
         'overflow-hidden rounded-[var(--radius-card)] border bg-raised shadow-card',
         tone === 'warning' ? 'border-warning/35' : 'border-line',
@@ -39,7 +42,7 @@ export function Lane({
       <h2>
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => onOpenChange(!open)}
           aria-expanded={open}
           className={cn(
             'flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-hover',

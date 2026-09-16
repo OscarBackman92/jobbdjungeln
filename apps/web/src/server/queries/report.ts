@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   ACTIVITY_TYPE_LABELS,
+  AF_OUTCOME_LABELS,
   type ActivityType,
   answeredAdLabel,
   type IsoDate,
@@ -16,7 +17,7 @@ import {
   today as todayIso,
 } from '@jobbdjungeln/core';
 import { schema } from '@jobbdjungeln/db';
-import { and, asc, between, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, between, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 
 /**
@@ -219,21 +220,34 @@ function activityRow(activity: {
   occurredOn: string;
   title: string;
   organisation: string;
+  afOutcome: string | null;
 }): ReportRow {
+  const type = activity.type as ActivityType;
+  const outcomeLabel =
+    activity.afOutcome === 'genomford' || activity.afOutcome === 'ej_genomford'
+      ? AF_OUTCOME_LABELS[activity.afOutcome]
+      : null;
   return {
     kind: 'activity',
     id: activity.id,
     datum: activity.occurredOn,
-    typ: ACTIVITY_TYPE_LABELS[activity.type as ActivityType] ?? activity.type,
+    typ: ACTIVITY_TYPE_LABELS[type] ?? activity.type,
     yrke: '',
     arbetsgivare: activity.organisation,
     omfattning: '',
     ort: '',
     svarade: '',
     lank: '',
-    anteckning: activity.title,
+    anteckning: outcomeLabel ? `${activity.title} · ${outcomeLabel}` : activity.title,
     // An activity has no occupation to be missing.
     missingOccupation: false,
+    dateWarning: null,
+    applicationId: null,
+    activityType: ACTIVITY_TYPE_LABELS[type] ? type : null,
+    afOutcome:
+      activity.afOutcome === 'genomford' || activity.afOutcome === 'ej_genomford'
+        ? activity.afOutcome
+        : null,
   };
 }
 
@@ -275,7 +289,48 @@ export async function reportRows(
       lank: job.adUrl,
       anteckning: job.title,
       missingOccupation: !job.occupationLabel,
+      dateWarning: null,
+      applicationId: job.id,
+      activityType: null,
+      afOutcome: null,
     });
+  }
+
+  if (jobs.length > 0 && !excluded) {
+    const earlyEvents = await database
+      .select({
+        applicationId: schema.applicationEvents.applicationId,
+        occurredAt: schema.applicationEvents.occurredAt,
+        eventType: schema.applicationEvents.eventType,
+      })
+      .from(schema.applicationEvents)
+      .where(
+        and(
+          eq(schema.applicationEvents.reportExcluded, false),
+          inArray(
+            schema.applicationEvents.applicationId,
+            jobs.map((job) => job.id),
+          ),
+          inArray(schema.applicationEvents.eventType, ['intervju', 'samtal']),
+        ),
+      );
+
+    const earliestByApp = new Map<string, { date: string; label: string }>();
+    for (const event of earlyEvents) {
+      const label = event.eventType === 'intervju' ? 'intervju' : 'kontakt';
+      const existing = earliestByApp.get(event.applicationId);
+      if (!existing || event.occurredAt < existing.date) {
+        earliestByApp.set(event.applicationId, { date: event.occurredAt, label });
+      }
+    }
+
+    for (const row of rows) {
+      if (row.kind !== 'job' || !row.datum) continue;
+      const early = earliestByApp.get(row.id);
+      if (early && row.datum > early.date) {
+        row.dateWarning = `Sökt-datum efter ${early.label} – stämmer det?`;
+      }
+    }
   }
 
   // Excluded activities have to come back too, or leaving one out of the report
@@ -304,6 +359,7 @@ export async function reportRows(
     database
       .select({
         id: schema.applicationEvents.id,
+        applicationId: schema.applicationEvents.applicationId,
         occurredAt: schema.applicationEvents.occurredAt,
         note: schema.applicationEvents.note,
         eventType: schema.applicationEvents.eventType,
@@ -355,6 +411,10 @@ export async function reportRows(
       lank: event.adUrl,
       anteckning: event.note,
       missingOccupation: false,
+      dateWarning: null,
+      applicationId: event.applicationId ?? null,
+      activityType: null,
+      afOutcome: null,
     });
   }
 

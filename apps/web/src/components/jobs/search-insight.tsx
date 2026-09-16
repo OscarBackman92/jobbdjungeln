@@ -1,102 +1,103 @@
 'use client';
 
-import type { JobHit } from '@/components/jobs/job-card';
+import { pluralWord } from '@jobbdjungeln/core';
+import type { SearchStatBucket, SearchStatValue } from '@jobbdjungeln/jobtech';
+import { useEffect, useId, useState } from 'react';
 
 /**
- * Lightweight market context from the ads already on screen.
+ * Market context for the full Platsbanken result set (JobTech `stats`).
  *
- * Not a national forecast — it answers "what does this result set look like?"
- * so the user can tighten or widen filters with something concrete.
+ * Collapsed by default so the first ad stays near the result count. Open state
+ * is remembered in localStorage when available.
  */
 
-function topCounts(
-  values: readonly string[],
-  limit = 5,
-): Array<{ label: string; count: number }> {
-  const map = new Map<string, number>();
-  for (const value of values) {
-    const key = value.trim();
-    if (!key) continue;
-    map.set(key, (map.get(key) ?? 0) + 1);
+const STORAGE_KEY = 'jobbdjungeln.search-insight.open';
+
+export type InsightFilterKind = 'municipality' | 'occupation-group';
+
+function readOpenPreference(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(STORAGE_KEY) === '1';
+  } catch {
+    return false;
   }
-  return [...map.entries()]
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'sv'))
-    .slice(0, limit);
 }
 
-function deadlineBuckets(jobs: readonly JobHit[], today: string) {
-  let overdue = 0;
-  let week = 0;
-  let later = 0;
-  let none = 0;
-  const todayMs = Date.parse(`${today}T12:00:00`);
-  const weekMs = todayMs + 7 * 24 * 60 * 60 * 1000;
-
-  for (const job of jobs) {
-    const day = job.applicationDeadline;
-    if (!day) {
-      none += 1;
-      continue;
-    }
-    const ms = Date.parse(`${day}T12:00:00`);
-    if (!Number.isFinite(ms)) {
-      none += 1;
-      continue;
-    }
-    if (ms < todayMs) overdue += 1;
-    else if (ms <= weekMs) week += 1;
-    else later += 1;
+function writeOpenPreference(open: boolean) {
+  try {
+    globalThis.localStorage?.setItem(STORAGE_KEY, open ? '1' : '0');
+  } catch {
+    // Private mode / disabled storage — ignore.
   }
+}
 
-  return [
-    { label: 'Utgångna', count: overdue, color: 'var(--danger)' },
-    { label: 'Inom 7 dagar', count: week, color: 'var(--warning)' },
-    { label: 'Senare', count: later, color: 'var(--chart-accent)' },
-    { label: 'Utan sista dag', count: none, color: 'var(--chart-muted)' },
-  ].filter((row) => row.count > 0);
+function visibleBucket(
+  bucket: SearchStatBucket | undefined,
+  activeIds: readonly string[],
+): SearchStatValue[] {
+  if (!bucket?.values.length) return [];
+  const values = bucket.values;
+  if (values.length === 1) {
+    const only = values[0];
+    if (only && activeIds.includes(only.conceptId)) return [];
+  }
+  return values;
 }
 
 function ShareBars({
   title,
   rows,
   total,
+  kind,
+  activeIds,
+  onSelect,
 }: {
   title: string;
-  rows: Array<{ label: string; count: number; color?: string }>;
+  rows: readonly SearchStatValue[];
   total: number;
+  kind: InsightFilterKind;
+  activeIds: readonly string[];
+  onSelect: (kind: InsightFilterKind, value: SearchStatValue) => void;
 }) {
   if (rows.length === 0 || total === 0) return null;
-  const max = Math.max(...rows.map((row) => row.count));
 
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-[13px] font-medium text-ink">{title}</h3>
       <ul className="flex flex-col gap-1.5">
         {rows.map((row) => {
-          const width = Math.max(8, Math.round((row.count / max) * 100));
           const share = Math.round((row.count / total) * 100);
+          const active = activeIds.includes(row.conceptId);
           return (
-            <li
-              key={row.label}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-[12px] text-muted">{row.label}</div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-sunken">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-500 ease-out"
-                    style={{
-                      width: `${width}%`,
-                      backgroundColor: row.color ?? 'var(--chart-accent)',
-                    }}
-                  />
+            <li key={row.conceptId}>
+              <button
+                type="button"
+                disabled={active}
+                onClick={() => onSelect(kind, row)}
+                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-control)] text-left outline-none transition-colors hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-default disabled:hover:bg-transparent"
+                aria-label={
+                  active
+                    ? `${row.label}, redan filterat, ${row.count} annonser`
+                    : `Filtrera på ${row.label}, ${row.count} annonser`
+                }
+              >
+                <div className="min-w-0 px-1 py-0.5">
+                  <div className="truncate text-[12px] text-muted">{row.label}</div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-sunken">
+                    <div
+                      className="h-full rounded-full transition-[width] duration-500 ease-out"
+                      style={{
+                        width: `${Math.min(100, Math.max(share > 0 ? share : 0, 0))}%`,
+                        backgroundColor: 'var(--chart-accent)',
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-              <span className="tabular-nums text-[12px] text-subtle">
-                {row.count}
-                <span className="text-subtle/80"> · {share}%</span>
-              </span>
+                <span className="pr-1 tabular-nums text-[12px] text-subtle">
+                  {row.count.toLocaleString('sv-SE')}
+                  <span className="text-subtle/80"> · {share}%</span>
+                </span>
+              </button>
             </li>
           );
         })}
@@ -106,36 +107,96 @@ function ShareBars({
 }
 
 export function SearchInsight({
-  jobs,
-  today,
+  total,
+  stats,
+  municipalities,
+  groups,
+  loading,
+  onAddFilter,
 }: {
-  jobs: readonly JobHit[];
-  /** Calendar day YYYY-MM-DD from the server or client local date. */
-  today: string;
+  total: number;
+  stats: readonly SearchStatBucket[] | undefined;
+  municipalities: readonly string[];
+  groups: readonly string[];
+  loading?: boolean;
+  onAddFilter: (kind: InsightFilterKind, value: SearchStatValue) => void;
 }) {
-  if (jobs.length < 3) return null;
+  const panelId = useId();
+  const [open, setOpen] = useState(false);
 
-  const locations = topCounts(jobs.map((job) => job.location));
-  const roles = topCounts(jobs.map((job) => job.occupationGroupLabel || job.occupationLabel));
-  const deadlines = deadlineBuckets(jobs, today);
+  useEffect(() => {
+    setOpen(readOpenPreference());
+  }, []);
 
-  if (locations.length === 0 && roles.length === 0 && deadlines.length === 0) {
+  const municipalityValues = visibleBucket(
+    stats?.find((bucket) => bucket.type === 'municipality'),
+    municipalities,
+  );
+  const groupValues = visibleBucket(
+    stats?.find((bucket) => bucket.type === 'occupation-group'),
+    groups,
+  );
+
+  if (total <= 0) return null;
+  if (!loading && municipalityValues.length === 0 && groupValues.length === 0) {
     return null;
   }
 
+  function toggle() {
+    setOpen((current) => {
+      const next = !current;
+      writeOpenPreference(next);
+      return next;
+    });
+  }
+
   return (
-    <section
-      className="grid gap-4 rounded-[var(--radius-card)] border border-line bg-raised p-4 sm:grid-cols-2"
-      aria-label="Insikter från träffarna"
-    >
-      <p className="text-[12px] text-subtle sm:col-span-2">
-        Baserat på de {jobs.length} annonser som laddats — inte hela Platsbanken.
-      </p>
-      <ShareBars title="Vanligaste orterna i träffarna" rows={locations} total={jobs.length} />
-      <ShareBars title="Vanligaste yrkesgrupperna" rows={roles} total={jobs.length} />
-      <div className="sm:col-span-2">
-        <ShareBars title="Sista ansökningsdag" rows={deadlines} total={jobs.length} />
-      </div>
+    <section className="flex flex-col gap-2" aria-label="Statistik för träffarna">
+      <button
+        type="button"
+        className="flex w-fit items-center gap-1 text-[13px] text-subtle outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-brand"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={toggle}
+      >
+        <span>
+          Statistik för {total.toLocaleString('sv-SE')}{' '}
+          {pluralWord(total, 'annons', 'annonser')}
+        </span>
+        <span aria-hidden="true" className="tabular-nums">
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          id={panelId}
+          className="grid gap-4 rounded-[var(--radius-card)] border border-line bg-raised p-4 sm:grid-cols-2"
+        >
+          {loading && !stats ? (
+            <p className="text-[12px] text-subtle sm:col-span-2">Hämtar statistik…</p>
+          ) : (
+            <>
+              <ShareBars
+                title="Vanligaste orterna"
+                rows={municipalityValues}
+                total={total}
+                kind="municipality"
+                activeIds={municipalities}
+                onSelect={onAddFilter}
+              />
+              <ShareBars
+                title="Vanligaste yrkesgrupperna"
+                rows={groupValues}
+                total={total}
+                kind="occupation-group"
+                activeIds={groups}
+                onSelect={onAddFilter}
+              />
+            </>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -118,9 +118,23 @@ export const ACTIVITY_TYPES = [
   'natverkande',
   'cv_arbete',
   'mote_af',
+  'platsanvisning',
+  'platsforslag',
+  'handlingsplan',
   'ovrigt',
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+
+/** AF activities transferred from the handlingsplan (report change 2026-06-01). */
+export const AF_PLAN_ACTIVITY_TYPES = [
+  'platsanvisning',
+  'platsforslag',
+  'handlingsplan',
+] as const satisfies readonly ActivityType[];
+export type AfPlanActivityType = (typeof AF_PLAN_ACTIVITY_TYPES)[number];
+
+export const AF_OUTCOMES = ['genomford', 'ej_genomford'] as const;
+export type AfOutcome = (typeof AF_OUTCOMES)[number];
 
 export const ACTIVITY_TYPE_LABELS: Readonly<Record<ActivityType, string>> = {
   rekryteringstraff: 'Rekryteringsträff / mässa',
@@ -129,8 +143,25 @@ export const ACTIVITY_TYPE_LABELS: Readonly<Record<ActivityType, string>> = {
   natverkande: 'Nätverkskontakt',
   cv_arbete: 'CV / personligt brev',
   mote_af: 'Möte med AF eller leverantör',
+  platsanvisning: 'Platsanvisning (obligatorisk)',
+  platsforslag: 'Platsförslag (rekommenderad)',
+  handlingsplan: 'Aktivitet från handlingsplanen',
   ovrigt: 'Övrigt',
 };
+
+export const AF_OUTCOME_LABELS: Readonly<Record<AfOutcome, string>> = {
+  genomford: 'Genomförd',
+  ej_genomford: 'Ej genomförd',
+};
+
+export function isAfPlanActivity(type: string): type is AfPlanActivityType {
+  return (AF_PLAN_ACTIVITY_TYPES as readonly string[]).includes(type);
+}
+
+/** Periods from June 2026 ask about handlingsplan items in Mina sidor. */
+export function periodUsesAfPlanQuestions(periodKey: string): boolean {
+  return periodKey >= '2026-06';
+}
 
 /**
  * Columns for the CSV download — matches the on-screen table so rows stay
@@ -181,6 +212,13 @@ export interface ReportRow {
   lank: string;
   anteckning: string;
   missingOccupation: boolean;
+  /** Set when appliedAt is later than an interview/contact for the same job. */
+  dateWarning: string | null;
+  /** Application id for job rows (and events that belong to one). */
+  applicationId: string | null;
+  /** Present on activity rows — used for AF handlingsplan filtering. */
+  activityType: ActivityType | null;
+  afOutcome: AfOutcome | null;
 }
 
 /** AF asks "Svarade du på en annons?" — only true for real ad responses. */

@@ -21,6 +21,7 @@ export default async function JobsPage() {
     occupationGroups: search.occupationGroups,
     remote: search.remote,
     matchCv: search.matchCv,
+    lastRunAt: search.lastRunAt ? search.lastRunAt.toISOString() : null,
   }));
 
   return (

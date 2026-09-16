@@ -20,11 +20,14 @@ function row(overrides: Partial<InsightRow> = {}): InsightRow {
 
 describe('buildSkillInsights', () => {
   it('lists gaps the CV does not already cover', () => {
-    const insights = buildSkillInsights([row(), row({ matchScore: 80 })], ['Excel']);
+    const insights = buildSkillInsights(
+      [row(), row({ matchScore: 80 }), row({ matchScore: 55 })],
+      ['Excel'],
+    );
     expect(insights.gapTerms.map((item) => item.term)).toContain('SQL');
     expect(insights.gapTerms.map((item) => item.term)).not.toContain('Excel');
     expect(insights.hitTerms.map((item) => item.term)).toContain('Excel');
-    expect(insights.scope.withSnapshot).toBe(2);
+    expect(insights.scope.withSnapshot).toBe(3);
   });
 
   it('hides gaps the user already owns', () => {

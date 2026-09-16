@@ -17,10 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Counts on the tabs, but only for things that genuinely need doing.
   const badges = {
-    '/sparade':
-      summary.savedLanes.utgangna +
-      summary.savedLanes.idag_imorgon +
-      summary.savedLanes.denna_vecka,
+    '/sparade': summary.savedLanes.idag_imorgon,
     '/ansokningar': summary.waitingTooLong,
     '/rapport': summary.nextActions.length > 0 ? 0 : 0,
   } as const;
