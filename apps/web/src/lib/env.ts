@@ -59,12 +59,12 @@ export const envSchema = z
     /** Brevo's HTTP API — SMTP ports are blocked on many hosts. */
     BREVO_API_KEY: z.string().optional(),
     SMTP_URL: z.string().optional(),
-    EMAIL_FROM: z.string().default('Jobbdjungeln <no-reply@jobbdjungeln.se>'),
+    EMAIL_FROM: z.string().default('Jobbdjungeln <noreply@obackman.se>'),
 
     /** Shared secret the scheduled jobs authenticate with. */
     CRON_SECRET: z.string().min(16).optional(),
 
-    /** Published at /.well-known/security.txt when set. */
+    /** Published at /.well-known/security.txt and in the integritetspolicy. */
     CONTACT_EMAIL: z.email().optional(),
 
     JOBTECH_SEARCH_URL: z.string().optional(),
@@ -104,6 +104,14 @@ export const envSchema = z
         code: 'custom',
         path: ['CRON_SECRET'],
         message: 'CRON_SECRET krävs i produktion, annars är jobb-endpointerna öppna.',
+      });
+    }
+    if (!value.CONTACT_EMAIL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CONTACT_EMAIL'],
+        message:
+          'CONTACT_EMAIL krävs i produktion (integritetspolicy, security.txt och feedback).',
       });
     }
     if (Boolean(value.GOOGLE_CLIENT_ID) !== Boolean(value.GOOGLE_CLIENT_SECRET)) {

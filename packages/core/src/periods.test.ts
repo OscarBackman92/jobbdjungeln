@@ -8,6 +8,7 @@ import {
   periodKey,
   periodLabel,
   periodStatus,
+  periodUsesAfPlanQuestions,
   reportingWindow,
   shiftPeriod,
 } from './periods.ts';
@@ -46,6 +47,14 @@ describe('reporting window', () => {
   it('runs from the 1st to the 14th of the following month', () => {
     expect(reportingWindow(2026, 3)).toEqual({ opens: '2026-04-01', closes: '2026-04-14' });
     expect(reportingWindow(2026, 12)).toEqual({ opens: '2027-01-01', closes: '2027-01-14' });
+  });
+});
+
+describe('AF handlingsplan questions', () => {
+  it('applies from June 2026 onwards', () => {
+    expect(periodUsesAfPlanQuestions('2026-05')).toBe(false);
+    expect(periodUsesAfPlanQuestions('2026-06')).toBe(true);
+    expect(periodUsesAfPlanQuestions('2026-09')).toBe(true);
   });
 });
 
@@ -131,6 +140,8 @@ describe('AF form output', () => {
         missingOccupation: false,
         dateWarning: null,
         applicationId: '1',
+        activityType: null,
+        afOutcome: null,
       }),
     ).toBe('Ekonomiassistent\tAcme AB\tHeltid\tStockholm\tJa\t2026-03-04');
   });

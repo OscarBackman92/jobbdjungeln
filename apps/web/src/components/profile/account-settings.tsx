@@ -36,12 +36,14 @@ export function AccountSettings({
   name,
   weeklySummaryOptIn,
   reminderOptIn,
+  contactEmail,
 }: {
   email: string;
   operatorId: string;
   name: string;
   weeklySummaryOptIn: boolean;
   reminderOptIn: boolean;
+  contactEmail?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -96,6 +98,27 @@ export function AccountSettings({
           </p>
         </CardContent>
       </Card>
+
+      {contactEmail ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Feedback</CardTitle>
+            <CardDescription>
+              Något som skaver, saknas eller fungerar oväntat? Skriv gärna — inkludera gärna
+              konto-id så det går att hitta rätt.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <a
+                href={`mailto:${contactEmail}?subject=${encodeURIComponent('Feedback om Jobbdjungeln')}&body=${encodeURIComponent(`Konto-id: ${operatorId}\n\n`)}`}
+              >
+                Skicka feedback
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

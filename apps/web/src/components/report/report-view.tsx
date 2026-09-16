@@ -3,11 +3,16 @@
 import {
   ACTIVITY_TYPE_LABELS,
   ACTIVITY_TYPES,
+  AF_OUTCOME_LABELS,
+  AF_OUTCOMES,
+  AF_PLAN_ACTIVITY_TYPES,
   clipboardText,
   daysBetween,
   formatShortDate,
+  isAfPlanActivity,
   PERIOD_STATUS_LABELS,
   type PeriodStatus,
+  periodUsesAfPlanQuestions,
   plural,
   type ReportRow,
   today as todayIso,
@@ -98,6 +103,8 @@ export function ReportView({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [addingActivity, setAddingActivity] = useState(false);
+  const [activityType, setActivityType] = useState<(typeof ACTIVITY_TYPES)[number]>('rekryteringstraff');
+  const [afOutcome, setAfOutcome] = useState<(typeof AF_OUTCOMES)[number]>('genomford');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,6 +113,11 @@ export function ReportView({
   const windowOpen = period.status === 'klar' || period.status === 'forsenad';
   const today = todayIso();
   const daysLeft = daysBetween(today, period.windowCloses);
+  const showAfPlan = periodUsesAfPlanQuestions(period.key);
+  const afPlanRows = period.rows.filter(
+    (row) => row.activityType && isAfPlanActivity(row.activityType),
+  );
+  const afTypeSelected = isAfPlanActivity(activityType);
 
   useEffect(() => {
     return () => {
@@ -191,21 +203,29 @@ export function ReportView({
 
   function addActivity(formData: FormData) {
     startTransition(async () => {
+      const type = String(formData.get('type') ?? 'ovrigt');
       const result = await saveActivityAction({
-        type: String(formData.get('type') ?? 'ovrigt'),
+        type,
         occurredOn: String(formData.get('occurredOn') ?? todayIso()),
         title: String(formData.get('title') ?? ''),
         organisation: String(formData.get('organisation') ?? ''),
         note: String(formData.get('note') ?? ''),
+        afOutcome: isAfPlanActivity(type) ? String(formData.get('afOutcome') ?? 'genomford') : null,
       });
       if (result.ok) {
         toast.success('Aktivitet tillagd');
         setAddingActivity(false);
+        setActivityType('rekryteringstraff');
         router.refresh();
       } else {
         toast.error(result.error);
       }
     });
+  }
+
+  function openAfActivity(type: (typeof AF_PLAN_ACTIVITY_TYPES)[number]) {
+    setActivityType(type);
+    setAddingActivity(true);
   }
 
   const markButton = (
@@ -288,6 +308,40 @@ export function ReportView({
           <p className="rounded-[var(--radius-card)] border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning-text">
             {period.banner}
           </p>
+        ) : null}
+
+        {showAfPlan ? (
+          <div className="rounded-[var(--radius-card)] border border-line bg-sunken px-4 py-3 text-sm text-muted">
+            <p className="font-medium text-ink">Från handlingsplanen (sedan 1 juni 2026)</p>
+            <p className="mt-1">
+              Mina sidor frågar om du genomfört platsanvisningar, platsförslag och andra
+              aktiviteter från handlingsplanen. Lägg in dem här så har du dem samlade inför
+              inlämningen.
+            </p>
+            {afPlanRows.length > 0 ? (
+              <p className="mt-2 text-[13px] text-subtle">
+                {plural(afPlanRows.length, 'sådan rad', 'sådana rader')} i den här månaden.
+              </p>
+            ) : (
+              <p className="mt-2 text-[13px] text-subtle">
+                Ingen sådan rad ännu — det är okej om du inte fått någon från AF.
+              </p>
+            )}
+            <div className="no-print mt-3 flex flex-wrap gap-2">
+              {AF_PLAN_ACTIVITY_TYPES.map((type) => (
+                <Button
+                  key={type}
+                  size="sm"
+                  variant="secondary"
+                  disabled={submitted}
+                  onClick={() => openAfActivity(type)}
+                >
+                  <Plus aria-hidden />
+                  {ACTIVITY_TYPE_LABELS[type]}
+                </Button>
+              ))}
+            </div>
+          </div>
         ) : null}
 
         {period.missingOccupationCount > 0 ? (
@@ -517,19 +571,35 @@ export function ReportView({
           är listan att utgå från.
         </p>
 
-        <Dialog open={addingActivity} onOpenChange={setAddingActivity}>
+        <Dialog
+          open={addingActivity}
+          onOpenChange={(open) => {
+            setAddingActivity(open);
+            if (!open) setActivityType('rekryteringstraff');
+          }}
+        >
           <DialogContent className="sm:w-[min(32rem,calc(100vw-2rem))]">
             <DialogHeader>
               <DialogTitle>Lägg till aktivitet</DialogTitle>
               <DialogDescription>
-                Allt som inte är en jobbansökan: kurser, mässor, spontanansökningar, möten.
+                Allt som inte är en jobbansökan: kurser, mässor, spontanansökningar, möten och
+                aktiviteter från handlingsplanen.
               </DialogDescription>
             </DialogHeader>
             <form action={addActivity}>
+              <input type="hidden" name="type" value={activityType} />
+              {afTypeSelected ? (
+                <input type="hidden" name="afOutcome" value={afOutcome} />
+              ) : null}
               <DialogBody className="grid gap-4 sm:grid-cols-2">
                 <Field label="Typ" required>
                   {(props) => (
-                    <Select name="type" defaultValue="rekryteringstraff">
+                    <Select
+                      value={activityType}
+                      onValueChange={(value) =>
+                        setActivityType(value as (typeof ACTIVITY_TYPES)[number])
+                      }
+                    >
                       <SelectTrigger {...props}>
                         <SelectValue />
                       </SelectTrigger>
@@ -554,10 +624,40 @@ export function ReportView({
                     />
                   )}
                 </Field>
-                <Field label="Vad gjorde du?" required className="sm:col-span-2">
+                {afTypeSelected ? (
+                  <Field label="Genomförd?" required className="sm:col-span-2">
+                    {(props) => (
+                      <Select
+                        value={afOutcome}
+                        onValueChange={(value) =>
+                          setAfOutcome(value as (typeof AF_OUTCOMES)[number])
+                        }
+                      >
+                        <SelectTrigger {...props}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AF_OUTCOMES.map((outcome) => (
+                            <SelectItem key={outcome} value={outcome}>
+                              {AF_OUTCOME_LABELS[outcome]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </Field>
+                ) : null}
+                <Field
+                  label={afTypeSelected ? 'Vad gällde det?' : 'Vad gjorde du?'}
+                  required
+                  className="sm:col-span-2"
+                >
                   {(props) => <Input {...props} name="title" required autoFocus />}
                 </Field>
-                <Field label="Arrangör eller organisation" className="sm:col-span-2">
+                <Field
+                  label={afTypeSelected ? 'Arbetsgivare eller arrangör' : 'Arrangör eller organisation'}
+                  className="sm:col-span-2"
+                >
                   {(props) => <Input {...props} name="organisation" />}
                 </Field>
                 <Field label="Anteckning" className="sm:col-span-2">

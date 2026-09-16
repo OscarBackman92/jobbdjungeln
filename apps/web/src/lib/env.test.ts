@@ -12,6 +12,7 @@ const VALID = {
   AUTH_SECRET: 'a'.repeat(32),
   APP_URL: 'https://jobbdjungeln.example.test',
   CRON_SECRET: 'b'.repeat(16),
+  CONTACT_EMAIL: 'kontakt@example.test',
   BREVO_API_KEY: 'xkeysib-test',
 };
 
@@ -35,6 +36,11 @@ describe('miljökonfiguration', () => {
   it('vägrar produktion utan hemlighet för de schemalagda jobben', () => {
     const { CRON_SECRET: _omitted, ...utan } = VALID;
     expect(messagesFor(utan)).toContain('CRON_SECRET');
+  });
+
+  it('vägrar produktion utan kontaktadress', () => {
+    const { CONTACT_EMAIL: _omitted, ...utan } = VALID;
+    expect(messagesFor(utan)).toContain('CONTACT_EMAIL');
   });
 
   it('vägrar produktion utan e-postleverantör', () => {

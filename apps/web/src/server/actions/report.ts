@@ -1,6 +1,6 @@
 'use server';
 
-import { parsePeriodKey, periodBounds, today as todayIso } from '@jobbdjungeln/core';
+import { isAfPlanActivity, parsePeriodKey, periodBounds, today as todayIso } from '@jobbdjungeln/core';
 import { schema } from '@jobbdjungeln/db';
 import { and, between, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
@@ -155,7 +155,7 @@ export async function saveActivityAction(
   const user = await requireUser();
   const parsed = activitySchema.safeParse(input);
   if (!parsed.success) return fromZod(parsed.error);
-  const { id, applicationId, ...values } = parsed.data;
+  const { id, applicationId, afOutcome, ...values } = parsed.data;
 
   // An activity may reference an application, but only one the user owns.
   let linked: string | null = null;
@@ -176,10 +176,12 @@ export async function saveActivityAction(
     await periodRow(user.id, `${activityYear}-${`${activityMonth}`.padStart(2, '0')}`);
   }
 
+  const outcome = isAfPlanActivity(values.type) ? (afOutcome ?? null) : null;
+
   if (id) {
     const [row] = await db()
       .update(schema.activities)
-      .set({ ...values, applicationId: linked })
+      .set({ ...values, applicationId: linked, afOutcome: outcome })
       .where(and(eq(schema.activities.id, id), eq(schema.activities.userId, user.id)))
       .returning({ id: schema.activities.id });
     if (!row) return fail('Aktiviteten finns inte.');
@@ -189,7 +191,7 @@ export async function saveActivityAction(
 
   const [row] = await db()
     .insert(schema.activities)
-    .values({ userId: user.id, ...values, applicationId: linked })
+    .values({ userId: user.id, ...values, applicationId: linked, afOutcome: outcome })
     .returning({ id: schema.activities.id });
   if (!row) return fail('Kunde inte spara aktiviteten.');
 

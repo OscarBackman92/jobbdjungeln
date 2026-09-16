@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   ACTIVITY_TYPE_LABELS,
+  AF_OUTCOME_LABELS,
   type ActivityType,
   answeredAdLabel,
   type IsoDate,
@@ -219,23 +220,34 @@ function activityRow(activity: {
   occurredOn: string;
   title: string;
   organisation: string;
+  afOutcome: string | null;
 }): ReportRow {
+  const type = activity.type as ActivityType;
+  const outcomeLabel =
+    activity.afOutcome === 'genomford' || activity.afOutcome === 'ej_genomford'
+      ? AF_OUTCOME_LABELS[activity.afOutcome]
+      : null;
   return {
     kind: 'activity',
     id: activity.id,
     datum: activity.occurredOn,
-    typ: ACTIVITY_TYPE_LABELS[activity.type as ActivityType] ?? activity.type,
+    typ: ACTIVITY_TYPE_LABELS[type] ?? activity.type,
     yrke: '',
     arbetsgivare: activity.organisation,
     omfattning: '',
     ort: '',
     svarade: '',
     lank: '',
-    anteckning: activity.title,
+    anteckning: outcomeLabel ? `${activity.title} · ${outcomeLabel}` : activity.title,
     // An activity has no occupation to be missing.
     missingOccupation: false,
     dateWarning: null,
     applicationId: null,
+    activityType: ACTIVITY_TYPE_LABELS[type] ? type : null,
+    afOutcome:
+      activity.afOutcome === 'genomford' || activity.afOutcome === 'ej_genomford'
+        ? activity.afOutcome
+        : null,
   };
 }
 
@@ -279,6 +291,8 @@ export async function reportRows(
       missingOccupation: !job.occupationLabel,
       dateWarning: null,
       applicationId: job.id,
+      activityType: null,
+      afOutcome: null,
     });
   }
 
@@ -399,6 +413,8 @@ export async function reportRows(
       missingOccupation: false,
       dateWarning: null,
       applicationId: event.applicationId ?? null,
+      activityType: null,
+      afOutcome: null,
     });
   }
 

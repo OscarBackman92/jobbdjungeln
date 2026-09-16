@@ -177,8 +177,11 @@ att ignorera avsändaren, och nästa som betyder något blir oläst.
 
 Viktiga miljövariabler i Vercel Production: `DATABASE_URL`, `AUTH_SECRET`,
 `APP_URL=https://jobbdjungeln.obackman.se`, `BREVO_API_KEY`, `EMAIL_FROM`,
-`CRON_SECRET`. Preview använder `*.vercel.app`; `APP_URL` och Better Auths
-`trustedOrigins` måste tillåta både skarp domän och Vercel-alias.
+`CONTACT_EMAIL`, `CRON_SECRET`. Preview använder `*.vercel.app`; `APP_URL` och
+Better Auths `trustedOrigins` måste tillåta både skarp domän och Vercel-alias.
+
+Aggregerad DB-statistik (inga personuppgifter): `GET /api/admin/stats` med
+`Authorization: Bearer $CRON_SECRET`.
 
 Importerade konton från den gamla Django-appen har **inga lösenord** — användare
 går in via glömt lösenord (eller manuellt satt hash vid cutover).
