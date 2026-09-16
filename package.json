@@ -23,7 +23,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.12",
+    "@biomejs/biome": "2.5.13",
     "turbo": "2.10.12",
     "typescript": "7.0.2"
   }
