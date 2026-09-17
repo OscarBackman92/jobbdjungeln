@@ -4,6 +4,8 @@
 uppföljningar och månadsrapporten på ett ställe — med sökning över hela
 Platsbanken och CV-matchning som förklarar sig själv.
 
+Live: [jobbdjungeln.obackman.se](https://jobbdjungeln.obackman.se) · licens: MIT
+
 > Det här är en omskrivning av [af-jobbansokan-api][gammal] i en modern
 > TypeScript-stack. Domänlogiken är portad och skärpt; se
 > [Vad som ändrats](#vad-som-ändrats-mot-den-gamla-versionen).
@@ -15,11 +17,11 @@ Platsbanken och CV-matchning som förklarar sig själv.
 | Vy | Vad den är till för |
 | --- | --- |
 | **Översikt** | Nyckeltal, nästa steg, tratten från sökt till erbjudande, takt och utfall |
-| **Sparade jobb** | Annonser du vill söka, grupperade efter hur bråttom det är |
+| **Sparade jobb** | Annonser du vill söka, grupperade efter hur bråttom det är (idag–imorgon m.m.) |
 | **Ansökningar** | Allt du sökt, grupperat efter vad som behöver göras — tyst för länge hamnar överst |
-| **Annonser** | Live-sökning i hela Platsbanken med CV-matchning per träff |
-| **Rapport** | Månadens aktiviteter i den ordning AF:s formulär frågar efter dem |
-| **Profil** | CV, e-postinställningar, export och radering av kontot |
+| **Annonser** | Live-sökning i hela Platsbanken med CV-matchning och marknadsinsikter per träff |
+| **Rapport** | Månadens aktiviteter i den ordning AF:s formulär frågar — inkl. platsanvisningar, platsförslag och handlingsplan (från juni 2026) |
+| **Profil** | CV, e-postinställningar, feedback, export och radering av kontot |
 
 ## Teknik
 
@@ -27,12 +29,13 @@ Platsbanken och CV-matchning som förklarar sig själv.
 | --- | --- |
 | Ramverk | Next.js 16 (App Router, Turbopack) + React 19 |
 | Språk | TypeScript 7, `strict` med `noUncheckedIndexedAccess` |
-| Databas | PostgreSQL + Drizzle ORM, migrationer i SQL |
-| Auth | better-auth — sessionscookie, e-postverifiering, valfri Google-inloggning |
+| Databas | **Neon** PostgreSQL (EU) + Drizzle ORM, migrationer i SQL |
+| Auth | better-auth — sessionscookie, e-postverifiering, rate limit i databasen, valfri Google-inloggning |
 | UI | Tailwind CSS v4 (CSS-first) + Radix Primitives |
 | Data i klienten | TanStack Query, mutationer via Server Actions |
 | Validering | Zod v4 på varje ingång |
-| Kvalitet | Biome, Vitest, Playwright, PGlite för databastester |
+| Hosting | Vercel (`arn1` / Stockholm), cron i `vercel.json` |
+| Kvalitet | Biome, Vitest, Playwright, PGlite för databastester, GitHub Actions på `main` |
 | Bygge | pnpm workspaces + Turborepo |
 
 ## Struktur
@@ -59,7 +62,7 @@ pnpm install
 cp .env.example .env
 
 docker compose up -d          # PostgreSQL på 5432
-pnpm db:migrate               # skapar tabellerna
+pnpm db:migrate               # skapar tabellerna (inkl. rate_limits)
 
 pnpm dev                      # http://localhost:3000
 ```
@@ -76,6 +79,7 @@ pnpm check          # lint + typer + enhetstester
 pnpm test           # enhetstester (Vitest)
 pnpm test:e2e       # end-to-end (Playwright) — startar sin egen stack
 pnpm db:generate    # ny migration från schemaändringar
+pnpm db:migrate     # kör SQL-migrationer
 pnpm db:studio      # bläddra i databasen
 ```
 
@@ -122,6 +126,15 @@ en ny post får bara börja intill ett datum.
 Filen sparas aldrig. Den läses i minnet och kastas; det som lagras är det utkast
 användaren granskat.
 
+### Månadsrapporten
+
+Rapporten byggs av det som redan finns i trackern: sökta jobb, händelser och
+aktiviteter. Sedan **1 juni 2026** frågar Arbetsförmedlingens Mina sidor också
+om aktiviteter från handlingsplanen. I Jobbdjungeln lägger du in dem som egna
+typer — platsanvisning, platsförslag eller handlingsplan — och markerar om de
+är genomförda eller inte. Listan är ett hjälpmedel; inlämningen sker fortfarande
+hos AF.
+
 ### Datum
 
 Allt användarsynligt är ett kalenderdatum i Europe/Stockholm och färdas som
@@ -130,12 +143,14 @@ Allt användarsynligt är ett kalenderdatum i Europe/Stockholm och färdas som
 
 ## Säkerhet och integritet
 
+- **Personuppgiftsansvarig:** Oscar Backman (Jobbdjungeln). Policy: `/integritet`.
 - **Sessionscookie**, inte token i localStorage: en `httpOnly`-cookie kan inte
   läsas av skript.
 - **E-postverifiering krävs** innan en session utfärdas. Lösenordsbyte dödar alla
   utestående sessioner.
-- **Hårdare rate limit** på inloggning, registrering och lösenordsåterställning
-  än på resten.
+- **Rate limit i databasen** (`rate_limits`), så taket håller över serverless-
+  instanser. Inloggning, registrering och lösenordsåterställning har stramare
+  tak än övriga auth-anrop.
 - **Ägarskap kontrolleras vid varje läsning och skrivning**, i frågan mot
   databasen — inte genom att anroparen kommer ihåg det.
 - **Allt valideras med Zod.** Det som går att nå från webbläsaren går att nå med
@@ -146,22 +161,26 @@ Allt användarsynligt är ett kalenderdatum i Europe/Stockholm och färdas som
   automatisk gallring av konton som varit vilande i två år — efter ett
   varningsmejl 30 dagar i förväg.
 - **Miljön valideras vid start** och vägrar starta produktion utan https, utan
-  hemlighet för de schemalagda jobben, eller med testläget påslaget. Testläget
-  (`AUTH_TEST_MODE`) är en enda brytare — e-postverifiering och rate limit — så
-  det finns exakt en sak att vägra i produktion.
+  `CRON_SECRET`, utan `CONTACT_EMAIL`, utan e-postleverantör, eller med
+  testläget påslaget. Testläget (`AUTH_TEST_MODE`) är en enda brytare — e-post-
+  verifiering och rate limit — så det finns exakt en sak att vägra i produktion.
 
 ## Schemalagda jobb
 
-Tre endpoints, skyddade av `CRON_SECRET` i `Authorization: Bearer …`:
+Tre endpoints, skyddade av `CRON_SECRET` i `Authorization: Bearer …`. Schemat
+ligger i `apps/web/vercel.json` (UTC):
 
-| Sökväg | Vad den gör | Föreslagen tid |
+| Sökväg | Vad den gör | Schema (UTC) |
 | --- | --- | --- |
-| `/api/cron/paminnelser` | Mejlar det som behöver följas upp eller sökas | dagligen 07:00 |
-| `/api/cron/veckobrev` | Veckoöversikt plus nya träffar på sparade sökningar | måndagar 08:00 |
-| `/api/cron/gallring` | Varnar och raderar vilande konton, rensar cachar | dagligen 03:00 |
+| `/api/cron/paminnelser` | Mejlar det som behöver följas upp eller sökas | `0 6 * * *` |
+| `/api/cron/veckobrev` | Veckoöversikt plus nya träffar på sparade sökningar | `0 7 * * 1` |
+| `/api/cron/gallring` | Varnar och raderar vilande konton, rensar cachar | `0 2 * * *` |
 
 Påminnelser skickas bara när det finns något att säga: ett tomt utskick lär folk
 att ignorera avsändaren, och nästa som betyder något blir oläst.
+
+> På Vercel Hobby kan cron vara begränsat — kontrollera i dashboarden att jobb
+> faktiskt körs om du förlitar dig på dem i produktion.
 
 ## Drift
 
@@ -169,22 +188,32 @@ att ignorera avsändaren, och nästa som betyder något blir oläst.
 
 | Del | Var |
 | --- | --- |
-| App | **Vercel** — projektet `jobbdjungeln-web` |
-| Domän | `https://jobbdjungeln.obackman.se` (DNS via Loopia → Vercel) |
-| Databas | **Neon Postgres** (Frankfurt / `eu-central-1`) |
-| E-post | **Brevo** — `EMAIL_FROM` ska vara en adress på autentiserad domän (t.ex. `noreply@obackman.se`), inte Gmail |
+| App | **Vercel** — projektet `jobbdjungeln-web`, funktionsregion `arn1` |
+| Domän | `https://jobbdjungeln.obackman.se` |
+| Databas | **Neon Postgres** (`eu-central-1` / Frankfurt) |
+| E-post | **Brevo** — `EMAIL_FROM` på autentiserad domän, t.ex. `Jobbdjungeln <noreply@obackman.se>` |
+| Kontakt | `CONTACT_EMAIL` (krav i prod) — visas i integritetspolicy, `security.txt` och feedback |
 | Cron | Vercel Cron mot `/api/cron/*` med `CRON_SECRET` |
+| Licens | MIT (`LICENSE`) |
+| Default branch | `main` (CI på push/PR mot `main`) |
 
-Viktiga miljövariabler i Vercel Production: `DATABASE_URL`, `AUTH_SECRET`,
-`APP_URL=https://jobbdjungeln.obackman.se`, `BREVO_API_KEY`, `EMAIL_FROM`,
-`CONTACT_EMAIL`, `CRON_SECRET`. Preview använder `*.vercel.app`; `APP_URL` och
-Better Auths `trustedOrigins` måste tillåta både skarp domän och Vercel-alias.
+Obligatoriska miljövariabler i Vercel Production:
 
-Aggregerad DB-statistik (inga personuppgifter): `GET /api/admin/stats` med
-`Authorization: Bearer $CRON_SECRET`.
+`DATABASE_URL`, `AUTH_SECRET`, `APP_URL=https://jobbdjungeln.obackman.se`,
+`BREVO_API_KEY` (eller `SMTP_URL`), `EMAIL_FROM`, `CONTACT_EMAIL`, `CRON_SECRET`.
+
+Preview använder `*.vercel.app`; Better Auths `trustedOrigins` tillåter både
+skarp domän och Vercel-alias. Auth-mejllänkar kanoniseras till `APP_URL`.
+
+Aggregerad DB-statistik (inga personuppgifter):
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  https://jobbdjungeln.obackman.se/api/admin/stats
+```
 
 Importerade konton från den gamla Django-appen har **inga lösenord** — användare
-går in via glömt lösenord (eller manuellt satt hash vid cutover).
+går in via glömt lösenord.
 
 ### Container / annan host
 
@@ -203,6 +232,8 @@ vid deploy och peka en scheduler på de tre cron-sökvägarna.
 - **End-to-end** med Playwright, i både desktop- och mobilupplösning. Sviten
   startar sin egen stack inklusive en mockad JobTech-server, så testerna aldrig
   beror på att ett tredjeparts-API är uppe eller svarar likadant två gånger.
+- **CI** (GitHub Actions): lint, typkontroll, enhetstester, produktionsbygge och
+  e2e mot Postgres-service.
 
 ## Vad som ändrats mot den gamla versionen
 
@@ -216,6 +247,8 @@ Utöver stacken:
   inte hur långt den kom — ett avslag suddar inte längre ut att man varit på
   intervju.
 - **Ansökningsdatum, deadlines och rapportmånader** är kalenderdatum hela vägen.
+- **Rapporten täcker AF:s handlingsplanfrågor** (platsanvisning / platsförslag /
+  övrigt från planen) från juni 2026.
 - **Tillgänglighet:** riktiga radioknappar och etiketter kopplade till sina
   kontroller, synlig fokusmarkering, respekt för `prefers-reduced-motion`, och
   en tabellvy under varje diagram.
