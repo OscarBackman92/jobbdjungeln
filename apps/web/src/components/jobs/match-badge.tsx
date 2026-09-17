@@ -1,6 +1,6 @@
 'use client';
 
-import type { MatchSnapshot } from '@jobbdjungeln/core';
+import { normalizeMatchSnapshot, type MatchSnapshot } from '@jobbdjungeln/core';
 import { useId, useState } from 'react';
 import { getMatchBadge } from '@/components/jobs/match-badge-logic';
 import { Badge, Popover, PopoverContent, PopoverTrigger } from '@/components/ui';
@@ -13,13 +13,20 @@ import { cn } from '@/lib/utils';
  * explanation when the score is uncertain. Colour never carries meaning alone —
  * the label always includes the fraction of krav.
  */
-export function MatchBadge({ jobId, match }: { jobId: string; match: MatchSnapshot | null }) {
+export function MatchBadge({
+  jobId,
+  match,
+}: {
+  jobId: string;
+  match: MatchSnapshot | Record<string, unknown> | null;
+}) {
   const [open, setOpen] = useState(false);
   const labelId = useId();
 
-  if (!match) return null;
+  const snapshot = normalizeMatchSnapshot(match);
+  if (!snapshot) return null;
 
-  const view = getMatchBadge(match);
+  const view = getMatchBadge(snapshot);
 
   const badge = (
     <Badge

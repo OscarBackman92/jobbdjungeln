@@ -367,5 +367,60 @@ export function trimSnapshot(result: MatchResult): MatchSnapshot {
   };
 }
 
+function asFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+/**
+ * Coerce stored jsonb (camelCase from Next, snake_case from Django import)
+ * into a MatchSnapshot the UI can render. Returns null when coverage counts
+ * are missing — callers should hide the badge rather than show "undefined".
+ */
+export function normalizeMatchSnapshot(raw: unknown): MatchSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+
+  const mustTotal = asFiniteNumber(row.mustTotal ?? row.must_total);
+  const mustCovered = asFiniteNumber(row.mustCovered ?? row.must_covered);
+  if (mustTotal === undefined || mustCovered === undefined) return null;
+
+  const bandRaw = row.band;
+  const band: MatchBand =
+    bandRaw === 'strong' || bandRaw === 'medium' || bandRaw === 'weak' || bandRaw === 'unknown'
+      ? bandRaw
+      : 'unknown';
+  const confidenceRaw = row.confidence;
+  const confidence: MatchConfidence =
+    confidenceRaw === 'high' || confidenceRaw === 'low' ? confidenceRaw : 'low';
+
+  const covered = Array.isArray(row.covered) ? (row.covered as MatchSnapshot['covered']) : [];
+  const gaps = Array.isArray(row.gaps) ? (row.gaps as MatchSnapshot['gaps']) : [];
+
+  return {
+    mustTotal,
+    mustCovered,
+    meritTotal: asFiniteNumber(row.meritTotal ?? row.merit_total) ?? 0,
+    meritCovered: asFiniteNumber(row.meritCovered ?? row.merit_covered) ?? 0,
+    score: asFiniteNumber(row.score) ?? null,
+    band,
+    confidence,
+    covered,
+    gaps,
+    unusedCvTerms: asStringList(row.unusedCvTerms ?? row.unused_cv_terms),
+    cvTermsUsed: asFiniteNumber(row.cvTermsUsed ?? row.cv_terms_used) ?? 0,
+    cvTermsTotal: asFiniteNumber(row.cvTermsTotal ?? row.cv_terms_total) ?? 0,
+  };
+}
+
 /** Current scoring algorithm version — bump to invalidate stored snapshots. */
 export const MATCH_VERSION = 3;

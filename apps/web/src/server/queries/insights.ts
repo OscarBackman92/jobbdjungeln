@@ -1,5 +1,9 @@
 import 'server-only';
-import { buildSkillInsights, matchingTermsFromResume } from '@jobbdjungeln/core';
+import {
+  buildSkillInsights,
+  matchingTermsFromResume,
+  normalizeMatchSnapshot,
+} from '@jobbdjungeln/core';
 import { schema } from '@jobbdjungeln/db';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -25,14 +29,7 @@ export async function skillInsights(userId: string) {
       archived: row.archivedAt !== null,
       matchScore: row.matchScore,
       matchScoredAt: row.matchScoredAt?.toISOString() ?? null,
-      matchSnapshot:
-        (row.matchSnapshot as {
-          mustTotal?: number;
-          meritTotal?: number;
-          gaps?: Array<{ term?: string; level?: string }>;
-          covered?: Array<{ term?: string }>;
-          unusedCvTerms?: string[];
-        } | null) ?? null,
+      matchSnapshot: normalizeMatchSnapshot(row.matchSnapshot),
     })),
     matchingTermsFromResume({
       skills: resume?.skills ?? [],

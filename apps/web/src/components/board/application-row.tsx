@@ -1,6 +1,5 @@
 'use client';
 
-import type { MatchSnapshot } from '@jobbdjungeln/core';
 import {
   formatRelativeDays,
   formatShortDate,
@@ -198,7 +197,7 @@ export function ApplicationRow({
           ) : null}
 
           {row.matchSnapshot ? (
-            <MatchBadge jobId={row.id} match={row.matchSnapshot as MatchSnapshot} />
+            <MatchBadge jobId={row.id} match={row.matchSnapshot} />
           ) : (
             <span
               className="inline-flex min-w-8 justify-center text-[13px] text-subtle"

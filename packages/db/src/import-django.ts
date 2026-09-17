@@ -19,6 +19,7 @@ import {
   isStage,
   isStatus,
   normalizeAdUrl,
+  normalizeMatchSnapshot,
   OUTCOMES,
   type Outcome,
   type Stage,
@@ -457,9 +458,14 @@ function snapshotObject(raw: unknown, matchProfileId: string): Record<string, un
   const base = isRecord(raw) ? { ...raw } : raw == null || raw === '' ? {} : null;
   if (base === null) return matchProfileId ? { matchProfileId } : null;
   const empty = Object.keys(base).length === 0;
-  if (matchProfileId) base.matchProfileId = matchProfileId;
   if (empty && !matchProfileId) return null;
-  return base;
+
+  // Django stored snake_case; Next expects camelCase. Prefer a normalized
+  // snapshot when coverage counts are present, and keep matchProfileId either way.
+  const normalized = normalizeMatchSnapshot(base);
+  const out: Record<string, unknown> = normalized ? { ...normalized } : { ...base };
+  if (matchProfileId) out.matchProfileId = matchProfileId;
+  return out;
 }
 
 export function mapExperience(raw: unknown, id: (index: number) => string): ResumeExperience[] {

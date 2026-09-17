@@ -8,6 +8,7 @@ import {
   isFollowUpOverdue,
   isOverdue,
   type MatchSnapshot,
+  normalizeMatchSnapshot,
   type SavedLane,
   type Stage,
   type Status,
@@ -99,6 +100,7 @@ function decorate(
 ): BoardRow {
   return {
     ...row,
+    matchSnapshot: normalizeMatchSnapshot(row.matchSnapshot),
     waitingDays: waitingDays(row, today),
     overdue: isOverdue(row, today),
     followUpOverdue: isFollowUpOverdue(row, today),

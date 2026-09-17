@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type Evidence,
   extractRequirements,
+  normalizeMatchSnapshot,
   postingLikeFromApplication,
   scorePosting,
   trimSnapshot,
@@ -235,5 +236,43 @@ describe('trimSnapshot', () => {
     expect(snapshot.covered.length).toBeLessThanOrEqual(12);
     expect(snapshot.unusedCvTerms.length).toBeLessThanOrEqual(12);
     expect(snapshot.score).toBe(result.score);
+  });
+});
+
+describe('normalizeMatchSnapshot', () => {
+  it('maps Django snake_case coverage counts to camelCase', () => {
+    expect(
+      normalizeMatchSnapshot({
+        must_total: 2,
+        must_covered: 1,
+        merit_total: 0,
+        merit_covered: 0,
+        band: 'unknown',
+        confidence: 'low',
+        covered: [],
+        gaps: [],
+        unused_cv_terms: ['Visma'],
+        cv_terms_used: 1,
+        cv_terms_total: 10,
+      }),
+    ).toMatchObject({
+      mustTotal: 2,
+      mustCovered: 1,
+      unusedCvTerms: ['Visma'],
+      cvTermsUsed: 1,
+      cvTermsTotal: 10,
+    });
+  });
+
+  it('returns null when coverage counts are missing', () => {
+    expect(normalizeMatchSnapshot({ score: 50 })).toBeNull();
+    expect(normalizeMatchSnapshot(null)).toBeNull();
+  });
+
+  it('passes through already-camelCase snapshots', () => {
+    expect(normalizeMatchSnapshot({ mustTotal: 4, mustCovered: 3 })).toMatchObject({
+      mustTotal: 4,
+      mustCovered: 3,
+    });
   });
 });
